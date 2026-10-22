@@ -27,12 +27,12 @@
   </script>
   <style>
     @keyframes fadeOutSlide {
-      0% { opacity: 1; transform: translateX(0); max-height: 120px; margin-bottom: 0.75rem; }
-      50% { opacity: 0; transform: translateX(50px); max-height: 120px; margin-bottom: 0.75rem; }
-      100% { opacity: 0; transform: translateX(50px); max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; }
+      0% { opacity: 1; transform: translateX(0); max-height: 140px; margin-bottom: 0.75rem; }
+      50% { opacity: 0; transform: translateX(60px); max-height: 140px; margin-bottom: 0.75rem; }
+      100% { opacity: 0; transform: translateX(60px); max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; border: none; }
     }
     .anim-complete {
-      animation: fadeOutSlide 0.6s forwards ease-in-out;
+      animation: fadeOutSlide 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
     .no-scrollbar::-webkit-scrollbar {
       display: none;
@@ -40,6 +40,20 @@
     .no-scrollbar {
       -ms-overflow-style: none;
       scrollbar-width: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 18px;
+      width: 18px;
+      border-radius: 50%;
+      background: #0284c7;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(2, 132, 199, 0.5);
+      border: 2px solid #ffffff;
+      transition: transform 0.1s ease;
+    }
+    input[type=range]::-webkit-slider-thumb:active {
+      transform: scale(1.2);
     }
   </style>
   <link rel="apple-touch-icon" href="https://fav.farm/✅">
@@ -58,122 +72,124 @@
             Task Manager Pro
           </h1>
         </div>
-        <p class="text-xs text-slate-400 mt-1">スライダー進捗 ・ カレンダー連携 ・ AIタスクアシスト</p>
+        <p class="text-xs text-slate-400 mt-1">スライダー進捗 ・ 編集機能 ・ カレンダー通知連携 ・ AI生成</p>
       </div>
 
       <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-        <button id="toggle-compact" onclick="toggleCompactMode()" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 flex items-center gap-1.5 transition-all">
-          <i data-lucide="eye-off" class="w-3.5 h-3.5"></i>
+        <button id="toggle-compact" onclick="toggleCompactMode()" class="px-3 py-2 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 flex items-center gap-1.5 transition-all">
+          <i data-lucide="eye-off" class="w-4 h-4"></i>
           <span id="compact-btn-text">コンパクト表示</span>
         </button>
 
-        <button onclick="openAiModal()" class="px-3 py-1.5 text-xs font-medium bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white rounded-lg shadow-lg shadow-indigo-500/20 flex items-center gap-1.5 transition-all">
-          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+        <button onclick="openAiModal()" class="px-3 py-2 text-xs font-semibold bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white rounded-xl shadow-lg shadow-indigo-500/20 flex items-center gap-1.5 transition-all">
+          <i data-lucide="sparkles" class="w-4 h-4"></i>
           <span>AI 一括生成</span>
         </button>
 
-        <button onclick="openTaskModal()" class="hidden md:flex px-4 py-1.5 text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-white rounded-lg shadow-lg shadow-sky-500/20 items-center gap-1.5 transition-all">
+        <button onclick="openTaskModal()" class="hidden md:flex px-4 py-2 text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-white rounded-xl shadow-lg shadow-sky-500/20 items-center gap-1.5 transition-all">
           <i data-lucide="plus" class="w-4 h-4"></i>
           <span>タスク追加</span>
         </button>
       </div>
     </header>
 
-    <!-- Stats & Filters -->
+    <!-- Stats Bar -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-      <div class="bg-slate-800/60 backdrop-blur border border-slate-700/50 p-3 rounded-xl flex items-center gap-3">
-        <div class="p-2.5 bg-sky-500/10 text-sky-400 rounded-lg"><i data-lucide="list-todo" class="w-5 h-5"></i></div>
+      <div class="bg-slate-800/60 backdrop-blur border border-slate-700/50 p-3.5 rounded-2xl flex items-center gap-3">
+        <div class="p-2.5 bg-sky-500/10 text-sky-400 rounded-xl"><i data-lucide="list-todo" class="w-5 h-5"></i></div>
         <div>
-          <div class="text-xs text-slate-400 font-medium">残タスク</div>
+          <div class="text-xs text-slate-400 font-medium">進行中</div>
           <div id="stat-active" class="text-lg font-bold text-slate-100">0</div>
         </div>
       </div>
-      <div class="bg-slate-800/60 backdrop-blur border border-slate-700/50 p-3 rounded-xl flex items-center gap-3">
-        <div class="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-lg"><i data-lucide="check-circle-2" class="w-5 h-5"></i></div>
+      <div class="bg-slate-800/60 backdrop-blur border border-slate-700/50 p-3.5 rounded-2xl flex items-center gap-3">
+        <div class="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl"><i data-lucide="check-circle-2" class="w-5 h-5"></i></div>
         <div>
-          <div class="text-xs text-slate-400 font-medium">完了済み</div>
+          <div class="text-xs text-slate-400 font-medium">完了アーカイブ</div>
           <div id="stat-completed" class="text-lg font-bold text-slate-100">0</div>
         </div>
       </div>
-      <div class="bg-slate-800/60 backdrop-blur border border-slate-700/50 p-3 rounded-xl flex items-center gap-3">
-        <div class="p-2.5 bg-amber-500/10 text-amber-400 rounded-lg"><i data-lucide="clock" class="w-5 h-5"></i></div>
+      <div class="bg-slate-800/60 backdrop-blur border border-slate-700/50 p-3.5 rounded-2xl flex items-center gap-3">
+        <div class="p-2.5 bg-amber-500/10 text-amber-400 rounded-xl"><i data-lucide="clock" class="w-5 h-5"></i></div>
         <div>
           <div class="text-xs text-slate-400 font-medium">本日/期限切れ</div>
           <div id="stat-urgent" class="text-lg font-bold text-amber-400">0</div>
         </div>
       </div>
-      <div class="bg-slate-800/60 backdrop-blur border border-slate-700/50 p-3 rounded-xl flex items-center gap-3">
-        <div class="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-lg"><i data-lucide="bar-chart-3" class="w-5 h-5"></i></div>
+      <div class="bg-slate-800/60 backdrop-blur border border-slate-700/50 p-3.5 rounded-2xl flex items-center gap-3">
+        <div class="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl"><i data-lucide="bar-chart-3" class="w-5 h-5"></i></div>
         <div>
-          <div class="text-xs text-slate-400 font-medium">平均進捗</div>
+          <div class="text-xs text-slate-400 font-medium">平均達成率</div>
           <div id="stat-progress" class="text-lg font-bold text-slate-100">0%</div>
         </div>
       </div>
     </div>
 
-    <!-- Filter Bar -->
-    <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-6 bg-slate-800/40 p-3 rounded-xl border border-slate-800">
+    <!-- Filter & Tab Control Bar -->
+    <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-6 bg-slate-800/40 p-3 rounded-2xl border border-slate-800">
       <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
-        <button onclick="setTab('active')" id="tab-active" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-500 text-white shadow-sm whitespace-nowrap">未完了</button>
-        <button onclick="setTab('completed')" id="tab-completed" class="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:bg-slate-800 whitespace-nowrap">完了済み</button>
+        <button onclick="setTab('active')" id="tab-active" class="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-sky-500 text-white shadow-md shadow-sky-500/20 whitespace-nowrap transition-all">未完了</button>
+        <button onclick="setTab('completed')" id="tab-completed" class="px-3.5 py-1.5 text-xs font-semibold rounded-xl text-slate-400 hover:bg-slate-800 whitespace-nowrap transition-all">完了済み</button>
         <div class="h-4 w-[1px] bg-slate-700 mx-1"></div>
-        <select id="genre-filter" onchange="render()" class="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg px-2.5 py-1.5 outline-none focus:border-sky-500">
-          <option value="all">すべてのジャンル</option>
+        <select id="genre-filter" onchange="render()" class="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-xl px-3 py-1.5 outline-none focus:border-sky-500">
+          <option value="all">全ジャンル</option>
         </select>
       </div>
 
       <div class="flex items-center gap-2 justify-between md:justify-end">
-        <select id="sort-by" onchange="render()" class="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg px-2.5 py-1.5 outline-none focus:border-sky-500">
-          <option value="dueDate">期限が近い順</option>
+        <select id="sort-by" onchange="render()" class="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-xl px-3 py-1.5 outline-none focus:border-sky-500">
+          <option value="dueDate">期限順</option>
           <option value="priority">優先度順</option>
-          <option value="created">作成日順</option>
+          <option value="created">追加順</option>
         </select>
-        <div class="flex bg-slate-900 border border-slate-700 rounded-lg p-0.5">
-          <button onclick="setViewMode('card')" id="view-card" class="p-1.5 rounded text-sky-400 bg-slate-800"><i data-lucide="layout-grid" class="w-3.5 h-3.5"></i></button>
-          <button onclick="setViewMode('table')" id="view-table" class="p-1.5 rounded text-slate-400 hover:text-slate-200"><i data-lucide="table" class="w-3.5 h-3.5"></i></button>
+        <div class="flex bg-slate-900 border border-slate-700 rounded-xl p-0.5">
+          <button onclick="setViewMode('card')" id="view-card" class="p-1.5 rounded-lg text-sky-400 bg-slate-800"><i data-lucide="layout-grid" class="w-4 h-4"></i></button>
+          <button onclick="setViewMode('table')" id="view-table" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-200"><i data-lucide="table" class="w-4 h-4"></i></button>
         </div>
       </div>
     </div>
 
-    <!-- Task List Container -->
+    <!-- Task Container -->
     <div id="task-container" class="space-y-3">
-      <!-- Tasks rendered here -->
+      <!-- Tasks dynamically rendered here -->
     </div>
-    <div id="empty-state" class="hidden py-16 text-center">
-      <div class="w-12 h-12 bg-slate-800 text-slate-500 rounded-2xl flex items-center gap-0 justify-center mx-auto mb-3">
+
+    <!-- Empty State -->
+    <div id="empty-state" class="hidden py-16 text-center bg-slate-800/30 rounded-2xl border border-slate-800">
+      <div class="w-12 h-12 bg-slate-800 text-slate-500 rounded-2xl flex items-center justify-center mx-auto mb-3">
         <i data-lucide="check-circle" class="w-6 h-6"></i>
       </div>
-      <p class="text-slate-400 text-sm font-medium">表示できるタスクがありません</p>
-      <p class="text-slate-500 text-xs mt-1">新しいタスクを追加してください</p>
+      <p class="text-slate-300 text-sm font-medium">該当するタスクがありません</p>
+      <p class="text-slate-500 text-xs mt-1">新規追加するかフィルターを切り替えてください</p>
     </div>
   </div>
 
   <!-- Mobile Floating Add Button -->
-  <button onclick="openTaskModal()" class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-sky-500 to-indigo-600 text-white rounded-full shadow-2xl shadow-sky-500/50 flex items-center justify-center text-2xl z-40 hover:scale-105 active:scale-95 transition-all">
+  <button onclick="openTaskModal()" class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-sky-500 to-indigo-600 text-white rounded-full shadow-2xl shadow-sky-500/40 flex items-center justify-center text-2xl z-40 active:scale-95 transition-transform">
     <i data-lucide="plus" class="w-7 h-7"></i>
   </button>
 
-  <!-- Create / Edit Task Modal -->
+  <!-- Task Add & Edit Modal -->
   <div id="task-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl relative my-auto">
       <div class="flex justify-between items-center px-6 py-4 border-b border-slate-800">
         <h3 id="modal-title" class="font-bold text-slate-100 flex items-center gap-2">
           <i data-lucide="edit-3" class="w-4 h-4 text-sky-400"></i> タスクの編集
         </h3>
-        <button onclick="closeTaskModal()" class="text-slate-400 hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <button onclick="closeTaskModal()" class="text-slate-400 hover:text-slate-200 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <form id="task-form" onsubmit="handleSaveTask(event)" class="p-6 space-y-4">
         <input type="hidden" id="edit-task-id" value="">
         
         <div>
-          <label class="block text-xs font-semibold text-slate-400 mb-1">やる事 (タイトル) *</label>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">やる事 (タイトル) <span class="text-red-400">*</span></label>
           <input type="text" id="input-title" required placeholder="例: 物理化学レポート提出" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-sky-500 transition-colors">
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
             <div class="flex justify-between items-center mb-1">
-              <label class="text-xs font-semibold text-slate-400">期限</label>
+              <label class="text-xs font-semibold text-slate-300">期限</label>
               <label class="text-[11px] text-slate-400 flex items-center gap-1 cursor-pointer">
                 <input type="checkbox" id="input-no-date" onchange="toggleNoDate(this.checked)" class="rounded bg-slate-950 border-slate-800 text-sky-500 focus:ring-0"> 期限なし
               </label>
@@ -181,7 +197,7 @@
             <input type="date" id="input-date" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">優先度</label>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">優先度</label>
             <select id="input-priority" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
               <option value="絶対">絶対 (高)</option>
               <option value="高" selected>高</option>
@@ -192,23 +208,23 @@
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">ジャンル</label>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">ジャンル</label>
             <input type="text" id="input-genre" placeholder="例: 学業・実験" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">目標ステップ (0/?)</label>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">目標ステップ (0/?)</label>
             <input type="number" id="input-max-step" min="1" max="50" value="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-400 mb-1">補足説明 (メモ)</label>
-          <textarea id="input-notes" rows="2" placeholder="詳細や必要なリンクなどを入力" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 resize-none"></textarea>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">補足説明 (メモ)</label>
+          <textarea id="input-notes" rows="3" placeholder="詳細やメモ、リンクなど..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 resize-none"></textarea>
         </div>
 
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" onclick="closeTaskModal()" class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200">キャンセル</button>
-          <button type="submit" class="px-5 py-2 text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-white rounded-xl shadow-lg shadow-sky-500/20">保存する</button>
+          <button type="submit" class="px-5 py-2 text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-white rounded-xl shadow-lg shadow-sky-500/20 transition-all">保存する</button>
         </div>
       </form>
     </div>
@@ -216,23 +232,23 @@
 
   <!-- AI Modal -->
   <div id="ai-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+    <div class="bg-slate-900 border border-indigo-500/30 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl relative my-auto">
       <div class="flex justify-between items-center px-6 py-4 border-b border-slate-800 bg-indigo-950/30">
         <h3 class="font-bold text-indigo-300 flex items-center gap-2">
           <i data-lucide="sparkles" class="w-5 h-5 text-indigo-400"></i> AIタスク自動生成
         </h3>
-        <button onclick="closeAiModal()" class="text-slate-400 hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <button onclick="closeAiModal()" class="text-slate-400 hover:text-slate-200 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <div class="p-6 space-y-4">
-        <p class="text-xs text-slate-400 leading-relaxed">
-          ざっくりとしたやりたい事や箇条書きを入力すると、AIが「タスク名」「優先度」「ジャンル」「ステップ数」を自動判定して一括生成します。
+        <p class="text-xs text-slate-300 leading-relaxed bg-indigo-950/40 p-3 rounded-xl border border-indigo-800/40">
+          やりたい事やメモを入力すると、AIが「タスク名」「優先度」「ジャンル」「分解ステップ数」を自動抽出して一括登録します。
         </p>
-        <textarea id="ai-prompt" rows="4" placeholder="例: 今週末の山行計画を立てる。あと来週火曜日までの物理化学レポートと奨学金の申請書類の確認。" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 resize-none"></textarea>
+        <textarea id="ai-prompt" rows="4" placeholder="例: 今週末に両神山の登山計画を立てる。あと来週火曜までの物理化学レポートと、テント打ち上げの居酒屋予約候補を探す。" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 resize-none"></textarea>
         
         <div class="flex justify-end gap-2 pt-2">
-          <button onclick="closeAiModal()" class="px-4 py-2 text-xs font-medium text-slate-400">キャンセル</button>
-          <button id="ai-submit-btn" onclick="generateTasksWithAi()" class="px-5 py-2 text-xs font-semibold bg-gradient-to-r from-indigo-600 to-sky-600 text-white rounded-xl shadow-lg shadow-indigo-500/20 flex items-center gap-1.5">
-            <i data-lucide="wand-2" class="w-4 h-4"></i> AIで自動抽出・生成
+          <button onclick="closeAiModal()" class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200">キャンセル</button>
+          <button id="ai-submit-btn" onclick="generateTasksWithAi()" class="px-5 py-2 text-xs font-semibold bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white rounded-xl shadow-lg shadow-indigo-500/20 flex items-center gap-1.5 transition-all">
+            <i data-lucide="wand-2" class="w-4 h-4"></i> AIで自動抽出・一括登録
           </button>
         </div>
       </div>
@@ -240,33 +256,29 @@
   </div>
 
   <script>
-    // --- Initial State & Storage ---
-    const STORAGE_KEY = 'task_manager_pro_data_v2';
+    const STORAGE_KEY = 'task_manager_pro_data_v3';
     
-    let defaultTasks = [
-      { id: '1', title: '山行計画立てる', dueDate: '', priority: '低', genre: '趣味・登山', currentStep: 0, maxStep: 5, notes: '両神山の登山ルート調べと時間計算', completed: false, created: Date.now() - 500000 },
-      { id: '2', title: '物理化学レポ', dueDate: '2026-11-04', priority: '絶対', genre: '学業', currentStep: 1, maxStep: 3, notes: '実験データ整理とグラフ作成', completed: false, created: Date.now() - 400000 },
-      { id: '3', title: '合成レポ', dueDate: '2026-11-08', priority: '絶対', genre: '学業', currentStep: 0, maxStep: 1, notes: '', completed: false, created: Date.now() - 300000 },
-      { id: '4', title: 'テント打ち上げ行先決定', dueDate: '2026-11-10', priority: '高', genre: 'イベント', currentStep: 1, maxStep: 1, notes: 'お店予約候補3つ出す', completed: true, created: Date.now() - 200000 }
+    const INITIAL_TASKS = [
+      { id: '1', title: '山行計画立てる', dueDate: '', priority: '低', genre: '趣味・登山', currentStep: 0, maxStep: 5, notes: '両神山の登山ルート検索・準備物チェック', completed: false, created: Date.now() - 500000 },
+      { id: '2', title: '物理化学レポ', dueDate: '2026-11-04', priority: '絶対', genre: '学業', currentStep: 1, maxStep: 3, notes: '実験データ集計とグラフ作成、考察の執筆', completed: false, created: Date.now() - 400000 },
+      { id: '3', title: '合成レポ', dueDate: '2026-11-08', priority: '絶対', genre: '学業', currentStep: 0, maxStep: 1, notes: '合成プロセスのフローチャート作成', completed: false, created: Date.now() - 300000 },
+      { id: '4', title: 'テント打ち上げ行先決定', dueDate: '2026-11-10', priority: '高', genre: 'イベント', currentStep: 1, maxStep: 1, notes: '予約候補のお店を3店舗リストアップ', completed: true, created: Date.now() - 200000 }
     ];
 
-    let tasks = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultTasks;
+    let tasks = JSON.parse(localStorage.getItem(STORAGE_KEY)) || INITIAL_TASKS;
     let currentTab = 'active';
-    let viewMode = 'card'; // card or table
+    let viewMode = 'card';
     let isCompact = false;
 
-    // --- Save & Init ---
     function saveStorage() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
       render();
     }
 
     function init() {
-      lucide.createIcons();
       render();
     }
 
-    // --- Helpers ---
     function formatDateBadge(dueDate) {
       if (!dueDate) return { label: '期限なし', class: 'bg-slate-800 text-slate-400 border-slate-700' };
       
@@ -276,7 +288,7 @@
       const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
 
       if (diffDays < 0) {
-        return { label: `期限切れ (${Math.abs(diffDays)}日超過)`, class: 'bg-rose-500/10 text-rose-400 border-rose-500/30 font-bold' };
+        return { label: `期限切れ (${Math.abs(diffDays)}日超)`, class: 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold' };
       } else if (diffDays === 0) {
         return { label: '今日が期限', class: 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold' };
       } else if (diffDays === 1) {
@@ -288,9 +300,9 @@
 
     function getPriorityBadge(priority) {
       switch(priority) {
-        case '絶対': return '<span class="px-2 py-0.5 text-[11px] font-bold rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">絶対</span>';
-        case '高': return '<span class="px-2 py-0.5 text-[11px] font-medium rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">高</span>';
-        default: return '<span class="px-2 py-0.5 text-[11px] font-medium rounded bg-slate-800 text-slate-400 border border-slate-700">低</span>';
+        case '絶対': return '<span class="px-2 py-0.5 text-[11px] font-bold rounded-md bg-rose-500/20 text-rose-400 border border-rose-500/30">絶対</span>';
+        case '高': return '<span class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30">高</span>';
+        default: return '<span class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-slate-800 text-slate-400 border border-slate-700">低</span>';
       }
     }
 
@@ -300,22 +312,18 @@
       const details = encodeURIComponent(notes || 'Task Manager Proより追加されたタスク');
       const titleEnc = encodeURIComponent(`【〆切】${title}`);
       
-      // 前日9:00のリマインダー設定URL
       const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${titleEnc}&dates=${cleanDate}/${cleanDate}&details=${details}&remind=1440`;
       window.open(url, '_blank');
     }
 
-    // --- Render Logic ---
     function render() {
-      // 1. Update Genres Dropdown
       const genreFilter = document.getElementById('genre-filter');
       const genres = Array.from(new Set(tasks.map(t => t.genre || '未分類')));
       const currentGenreVal = genreFilter.value;
-      genreFilter.innerHTML = '<option value="all">すべてのジャンル</option>' + 
-        genres.map(g => `<option value="${g}">${g}</option>`).join('');
+      genreFilter.innerHTML = '<option value="all">全ジャンル</option>' + 
+        genres.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
       genreFilter.value = currentGenreVal;
 
-      // 2. Filter & Sort
       const selectedGenre = genreFilter.value;
       const sortBy = document.getElementById('sort-by').value;
 
@@ -338,7 +346,6 @@
         }
       });
 
-      // 3. Stats Update
       const activeCount = tasks.filter(t => !t.completed).length;
       const completedCount = tasks.filter(t => t.completed).length;
       const urgentCount = tasks.filter(t => !t.completed && t.dueDate && (new Date(t.dueDate + 'T00:00:00') - new Date().setHours(0,0,0,0)) <= 86400000).length;
@@ -349,7 +356,6 @@
       document.getElementById('stat-urgent').innerText = urgentCount;
       document.getElementById('stat-progress').innerText = `${avgProgress}%`;
 
-      // 4. Task List Render
       const container = document.getElementById('task-container');
       const emptyState = document.getElementById('empty-state');
 
@@ -362,7 +368,7 @@
           container.className = "grid grid-cols-1 gap-3";
           container.innerHTML = filtered.map(t => renderTaskCard(t)).join('');
         } else {
-          container.className = "overflow-x-auto bg-slate-900 border border-slate-800 rounded-xl";
+          container.className = "overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl shadow-xl";
           container.innerHTML = renderTaskTable(filtered);
         }
       }
@@ -372,44 +378,43 @@
 
     function renderTaskCard(t) {
       const dateInfo = formatDateBadge(t.dueDate);
-      const isMax = t.currentStep >= t.maxStep;
       const pct = Math.round((t.currentStep / t.maxStep) * 100);
 
       return `
-        <div id="task-card-${t.id}" class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-4 transition-all hover:border-slate-600 ${t.completed ? 'opacity-60' : ''}">
+        <div id="task-card-${t.id}" class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-4 transition-all hover:border-slate-600 shadow-md ${t.completed ? 'opacity-60' : ''}">
           <div class="flex items-start justify-between gap-3">
             <div class="flex items-start gap-3 flex-1 min-w-0">
-              <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleComplete('${t.id}')" class="mt-1 w-5 h-5 rounded border-slate-700 bg-slate-900 text-sky-500 focus:ring-0 cursor-pointer">
+              <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleComplete('${t.id}')" class="mt-1 w-5 h-5 rounded-lg border-slate-700 bg-slate-900 text-sky-500 focus:ring-0 cursor-pointer">
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <h4 class="font-semibold text-slate-100 ${t.completed ? 'line-through text-slate-400' : ''}">${escapeHtml(t.title)}</h4>
+                  <h4 class="font-bold text-slate-100 text-base ${t.completed ? 'line-through text-slate-400' : ''}">${escapeHtml(t.title)}</h4>
                   ${getPriorityBadge(t.priority)}
-                  ${t.genre ? `<span class="px-2 py-0.5 text-[10px] bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded-md">\${escapeHtml(t.genre)}</span>` : ''}
+                  ${t.genre ? `<span class="px-2 py-0.5 text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-lg">${escapeHtml(t.genre)}</span>` : ''}
                 </div>
 
-                ${(!isCompact && t.notes) ? `<p class="text-xs text-slate-400 mt-1.5 leading-relaxed">\${escapeHtml(t.notes)}</p>` : ''}
+                ${(!isCompact && t.notes) ? `<p class="text-xs text-slate-300 mt-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 leading-relaxed whitespace-pre-line pl-3 border-l-2 border-l-sky-500">${escapeHtml(t.notes)}</p>` : ''}
 
                 <div class="flex items-center gap-2 mt-2 flex-wrap text-xs">
-                  <span class="px-2.5 py-0.5 rounded-full border text-[11px] font-medium flex items-center gap-1 ${dateInfo.class}">
-                    <i data-lucide="calendar" class="w-3 h-3"></i> ${dateInfo.label}
+                  <span class="px-2.5 py-1 rounded-lg border text-[11px] font-medium flex items-center gap-1.5 ${dateInfo.class}">
+                    <i data-lucide="calendar" class="w-3.5 h-3.5"></i> ${dateInfo.label}
                   </span>
-                  ${t.dueDate ? `<button onclick="addToGoogleCalendar('\${escapeHtml(t.title)}', '${t.dueDate}', '${escapeHtml(t.notes)}')" class="text-slate-400 hover:text-sky-400 transition-colors flex items-center gap-1 text-[11px]"><i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> カレンダー追加</button>` : ''}
+                  ${t.dueDate ? `<button onclick="addToGoogleCalendar('${escapeHtml(t.title)}', '${t.dueDate}', '${escapeHtml(t.notes)}')" class="text-sky-400 hover:text-sky-300 font-medium transition-colors flex items-center gap-1 text-[11px] bg-sky-500/10 px-2.5 py-1 rounded-lg border border-sky-500/20"><i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> カレンダー追加</button>` : ''}
                 </div>
               </div>
             </div>
 
-            <!-- Actions -->
+            <!-- Edit & Delete Buttons -->
             <div class="flex items-center gap-1">
-              <button onclick="openTaskModal('${t.id}')" class="p-1.5 text-slate-400 hover:text-sky-400 rounded-lg hover:bg-slate-700/50 transition-colors" title="編集"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-              <button onclick="deleteTask('${t.id}')" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-700/50 transition-colors" title="削除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+              <button onclick="openTaskModal('${t.id}')" class="p-2 text-slate-400 hover:text-sky-400 rounded-xl hover:bg-slate-700/60 transition-colors" title="編集"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+              <button onclick="deleteTask('${t.id}')" class="p-2 text-slate-400 hover:text-rose-400 rounded-xl hover:bg-slate-700/60 transition-colors" title="削除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
             </div>
           </div>
 
           <!-- Slider Progress -->
-          <div class="mt-3 pt-3 border-t border-slate-700/40">
-            <div class="flex justify-between items-center text-xs mb-1">
-              <span class="text-slate-400 font-medium">進捗: <strong class="text-sky-400 font-bold">${t.currentStep}/${t.maxStep}</strong> (${pct}%)</span>
-              <span class="text-[11px] text-slate-500">スライダーで更新</span>
+          <div class="mt-3.5 pt-3 border-t border-slate-700/50 space-y-1.5">
+            <div class="flex justify-between items-center text-xs">
+              <span class="text-slate-400 font-medium">進捗状況</span>
+              <span class="text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">${t.currentStep} / ${t.maxStep} (${pct}%)</span>
             </div>
             <input type="range" min="0" max="${t.maxStep}" value="${t.currentStep}" onchange="updateStep('${t.id}', this.value)" class="w-full h-2 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-sky-500">
           </div>
@@ -422,38 +427,44 @@
         <table class="w-full text-left text-xs text-slate-300">
           <thead class="bg-slate-950 text-slate-400 font-semibold border-b border-slate-800">
             <tr>
-              <th class="p-3 w-10 text-center">済</th>
-              <th class="p-3">やる事 / 備考</th>
-              <th class="p-3">ジャンル</th>
-              <th class="p-3">優先度</th>
-              <th class="p-3">期限</th>
-              <th class="p-3 w-48">進捗 (?/${tasksList[0]?.maxStep || 5})</th>
-              <th class="p-3 text-right">操作</th>
+              <th class="p-3.5 w-10 text-center">済</th>
+              <th class="p-3.5">タスク内容 & 補足説明</th>
+              <th class="p-3.5">ジャンル</th>
+              <th class="p-3.5">優先度</th>
+              <th class="p-3.5">期限</th>
+              <th class="p-3.5 w-48">進捗スライダー</th>
+              <th class="p-3.5 text-right">操作</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-800">
             ${tasksList.map(t => {
               const dateInfo = formatDateBadge(t.dueDate);
+              const pct = Math.round((t.currentStep / t.maxStep) * 100);
               return `
-                <tr id="task-row-\${t.id}" class="hover:bg-slate-800/40 transition-colors">
-                  <td class="p-3 text-center">
+                <tr id="task-row-${t.id}" class="hover:bg-slate-800/40 transition-colors">
+                  <td class="p-3.5 text-center align-top pt-4">
                     <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleComplete('${t.id}')" class="w-4 h-4 rounded border-slate-700 bg-slate-900 text-sky-500">
                   </td>
-                  <td class="p-3">
-                    <div class="font-semibold text-slate-100 \${t.completed ? 'line-through text-slate-500' : ''}">${escapeHtml(t.title)}</div>${(!isCompact && t.notes) ? `<div class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(t.notes)}</div>` : ''}
+                  <td class="p-3.5 align-top">
+                    <div class="font-bold text-slate-100 text-sm ${t.completed ? 'line-through text-slate-500' : ''}">${escapeHtml(t.title)}</div>
+                    ${(!isCompact && t.notes) ? `<div class="text-[11px] text-slate-400 mt-1 bg-slate-950/40 p-2 rounded-lg border border-slate-800 leading-relaxed whitespace-pre-line">${escapeHtml(t.notes)}</div>` : ''}
                   </td>
-                  <td class="p-3">\${t.genre ? `<span class="px-2 py-0.5 text-[10px] bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded">${escapeHtml(t.genre)}</span>` : '-'}</td>
-                  <td class="p-3">\${getPriorityBadge(t.priority)}</td>
-                  <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] border ${dateInfo.class}">${dateInfo.label}</span></td>
-                  <td class="p-3">
-                    <div class="flex items-center gap-2">
-                      <input type="range" min="0" max="\${t.maxStep}" value="${t.currentStep}" onchange="updateStep('${t.id}', this.value)" class="w-24 h-1.5 bg-slate-950 rounded appearance-none accent-sky-500">
-                      <span class="text-[11px] font-bold text-sky-400">${t.currentStep}/${t.maxStep}</span>
+                  <td class="p-3.5 align-top pt-4">${t.genre ? `<span class="px-2 py-0.5 text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-lg">${escapeHtml(t.genre)}</span>` : '-'}</td>
+                  <td class="p-3.5 align-top pt-4">${getPriorityBadge(t.priority)}</td>
+                  <td class="p-3.5 align-top pt-4">
+                    <span class="px-2 py-0.5 rounded-lg text-[10px] border ${dateInfo.class}">${dateInfo.label}</span>
+                  </td>
+                  <td class="p-3.5 align-top pt-3">
+                    <div class="space-y-1">
+                      <div class="flex justify-between text-[11px]">
+                        <span class="text-sky-400 font-bold">${t.currentStep}/${t.maxStep} (${pct}%)</span>
+                      </div>
+                      <input type="range" min="0" max="${t.maxStep}" value="${t.currentStep}" onchange="updateStep('${t.id}', this.value)" class="w-full h-1.5 bg-slate-950 rounded appearance-none accent-sky-500">
                     </div>
                   </td>
-                  <td class="p-3 text-right">
-                    <button onclick="openTaskModal('\${t.id}')" class="p-1 text-slate-400 hover:text-sky-400"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="deleteTask('\${t.id}')" class="p-1 text-slate-400 hover:text-rose-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                  <td class="p-3.5 text-right align-top pt-3">
+                    <button onclick="openTaskModal('${t.id}')" class="p-1.5 text-slate-400 hover:text-sky-400 rounded-lg hover:bg-slate-800" title="編集"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                    <button onclick="deleteTask('${t.id}')" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800" title="削除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                   </td>
                 </tr>
               `;
@@ -463,7 +474,6 @@
       `;
     }
 
-    // --- Actions ---
     function updateStep(id, val) {
       const step = parseInt(val);
       const task = tasks.find(t => t.id === id);
@@ -471,7 +481,6 @@
 
       task.currentStep = step;
 
-      // Auto archive if reaches maxStep
       if (task.currentStep >= task.maxStep && !task.completed) {
         animateComplete(id, () => {
           task.completed = true;
@@ -503,14 +512,14 @@
       const el = document.getElementById(`task-card-${id}`) || document.getElementById(`task-row-${id}`);
       if (el) {
         el.classList.add('anim-complete');
-        setTimeout(callback, 550);
+        setTimeout(callback, 500);
       } else {
         callback();
       }
     }
 
     function deleteTask(id) {
-      if (confirm('このタスクを削除しますか？')) {
+      if (confirm('このタスクを削除してもよろしいですか？')) {
         tasks = tasks.filter(t => t.id !== id);
         saveStorage();
       }
@@ -518,15 +527,15 @@
 
     function setTab(tab) {
       currentTab = tab;
-      document.getElementById('tab-active').className = tab === 'active' ? "px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-500 text-white shadow-sm" : "px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:bg-slate-800";
-      document.getElementById('tab-completed').className = tab === 'completed' ? "px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-500 text-white shadow-sm" : "px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:bg-slate-800";
+      document.getElementById('tab-active').className = tab === 'active' ? "px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-sky-500 text-white shadow-md shadow-sky-500/20 whitespace-nowrap transition-all" : "px-3.5 py-1.5 text-xs font-semibold rounded-xl text-slate-400 hover:bg-slate-800 whitespace-nowrap transition-all";
+      document.getElementById('tab-completed').className = tab === 'completed' ? "px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-sky-500 text-white shadow-md shadow-sky-500/20 whitespace-nowrap transition-all" : "px-3.5 py-1.5 text-xs font-semibold rounded-xl text-slate-400 hover:bg-slate-800 whitespace-nowrap transition-all";
       render();
     }
 
     function setViewMode(mode) {
       viewMode = mode;
-      document.getElementById('view-card').className = mode === 'card' ? "p-1.5 rounded text-sky-400 bg-slate-800" : "p-1.5 rounded text-slate-400 hover:text-slate-200";
-      document.getElementById('view-table').className = mode === 'table' ? "p-1.5 rounded text-sky-400 bg-slate-800" : "p-1.5 rounded text-slate-400 hover:text-slate-200";
+      document.getElementById('view-card').className = mode === 'card' ? "p-1.5 rounded-lg text-sky-400 bg-slate-800" : "p-1.5 rounded-lg text-slate-400 hover:text-slate-200";
+      document.getElementById('view-table').className = mode === 'table' ? "p-1.5 rounded-lg text-sky-400 bg-slate-800" : "p-1.5 rounded-lg text-slate-400 hover:text-slate-200";
       render();
     }
 
@@ -536,7 +545,6 @@
       render();
     }
 
-    // --- Modal Actions ---
     function openTaskModal(editId = null) {
       const modal = document.getElementById('task-modal');
       const form = document.getElementById('task-form');
@@ -544,7 +552,7 @@
       if (editId) {
         const task = tasks.find(t => t.id === editId);
         if (!task) return;
-        document.getElementById('modal-title').innerText = 'タスクの編集';
+        document.getElementById('modal-title').innerHTML = '<i data-lucide="edit-3" class="w-4 h-4 text-sky-400"></i> タスクの編集';
         document.getElementById('edit-task-id').value = task.id;
         document.getElementById('input-title').value = task.title;
         document.getElementById('input-date').value = task.dueDate || '';
@@ -555,7 +563,7 @@
         document.getElementById('input-max-step').value = task.maxStep || 1;
         document.getElementById('input-notes').value = task.notes || '';
       } else {
-        document.getElementById('modal-title').innerText = '新規タスク追加';
+        document.getElementById('modal-title').innerHTML = '<i data-lucide="plus-circle" class="w-4 h-4 text-sky-400"></i> 新規タスク追加';
         document.getElementById('edit-task-id').value = '';
         form.reset();
         document.getElementById('input-no-date').checked = false;
@@ -564,6 +572,7 @@
       }
 
       modal.classList.remove('hidden');
+      lucide.createIcons();
     }
 
     function closeTaskModal() {
@@ -588,7 +597,6 @@
       const notes = document.getElementById('input-notes').value.trim();
 
       if (editId) {
-        // Update
         const task = tasks.find(t => t.id === editId);
         if (task) {
           task.title = title;
@@ -600,7 +608,6 @@
           task.notes = notes;
         }
       } else {
-        // Create
         tasks.unshift({
           id: Date.now().toString(),
           title,
@@ -619,7 +626,6 @@
       closeTaskModal();
     }
 
-    // --- AI Modal & Generation ---
     function openAiModal() {
       document.getElementById('ai-modal').classList.remove('hidden');
     }
@@ -637,12 +643,11 @@
       btn.disabled = true;
 
       setTimeout(() => {
-        // Simple client-side AI parser fallback
         const lines = prompt.split(/[。\n、]/).filter(l => l.trim().length > 2);
         lines.forEach(line => {
           let genre = '全般';
-          if (line.includes('山') || line.includes('登') || line.includes('キャンプ')) genre = '趣味・アウトドア';
-          else if (line.includes('レポ') || line.includes('勉') || line.includes('単語')) genre = '学業';
+          if (line.includes('山') || line.includes('登') || line.includes('キャンプ')) genre = '趣味・登山';
+          else if (line.includes('レポ') || line.includes('勉') || line.includes('実験')) genre = '学業';
           else if (line.includes('予約') || line.includes('買い') || line.includes('手続き')) genre = '生活';
 
           tasks.unshift({
@@ -653,18 +658,18 @@
             genre,
             currentStep: 0,
             maxStep: line.includes('計画') ? 5 : 1,
-            notes: 'AIにより自動生成されたタスク',
+            notes: 'AI自動生成タスク',
             completed: false,
             created: Date.now()
           });
         });
 
         saveStorage();
-        btn.innerHTML = '<i data-lucide="wand-2" class="w-4 h-4"></i> AIで自動抽出・生成';
+        btn.innerHTML = '<i data-lucide="wand-2" class="w-4 h-4"></i> AIで自動抽出・一括登録';
         btn.disabled = false;
         closeAiModal();
         document.getElementById('ai-prompt').value = '';
-      }, 1000);
+      }, 800);
     }
 
     function escapeHtml(str) {
