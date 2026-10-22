@@ -1,1 +1,1095 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スマート Task Manager Pro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            500: '#06b6d4',
+                            600: '#0891b2',
+                            700: '#0e7490',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .task-row-leave {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0;
+            transform: translateY(-12px) scale(0.96);
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            margin-top: 0;
+            margin-bottom: 0;
+            overflow: hidden;
+            border: none;
+        }
+        .touch-target {
+            min-height: 44px;
+            min-width: 44px;
+        }
+        /* スライダーのカスタムスタイリング */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #06b6d4;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+            border: 2px solid #ffffff;
+            transition: transform 0.1s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:active {
+            transform: scale(1.25);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen transition-colors duration-300 pb-24 md:pb-12">
 
+    <!-- Firebase SDK Script -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'task-app-default';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : { apiKey: "demo", authDomain: "demo", projectId: "demo" };
+
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let tasks = [];
+        let unsubscribeTasks = null;
+
+        // UI 状態設定
+        let viewMode = window.innerWidth < 768 ? 'card' : 'table';
+        let currentTab = 'active'; // 'active' | 'completed'
+        let filterPriority = 'ALL';
+        let searchQuery = '';
+        let sortBy = 'deadline';
+        let filterGenre = 'ALL';
+        let isDarkMode = true;
+        let showDetails = true;
+
+        const PRIORITY_MAP = {
+            '絶対': { rank: 1, badgeClass: 'bg-red-500/20 text-red-400 border-red-500/40' },
+            '高': { rank: 2, badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/40' },
+            '低': { rank: 3, badgeClass: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' }
+        };
+
+        const GENRE_COLORS = {
+            '学業・研究': 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+            '登山・アウトドア': 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+            '手続き・雑務': 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+            'イベント・交流': 'bg-pink-500/20 text-pink-300 border-pink-500/40',
+            '就活・キャリア': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+            'その他': 'bg-slate-700/50 text-slate-300 border-slate-600'
+        };
+
+        const INITIAL_TASKS = [
+            { title: "山行く計画立てる", deadline: "2026-10-28", priority: "絶対", genre: "登山・アウトドア", note: "登山ルート選定・準備物・山の天気確認", progress: 0, maxProgress: 5, completed: false },
+            { title: "合成レポ", deadline: "2026-10-23", priority: "絶対", genre: "学業・研究", note: "実験データの集計とグラフ作成、考察セクションの執筆", progress: 1, maxProgress: 5, completed: false },
+            { title: "インフォーマ課題@7", deadline: "2026-10-25", priority: "高", genre: "学業・研究", note: "第7章の演習問題（P.120-135）の解法提出", progress: 0, maxProgress: 1, completed: false },
+            { title: "本郷にメセカを設置する", deadline: "", priority: "高", genre: "イベント・交流", note: "メッセージカード台紙の準備と現地受領確認", progress: 0, maxProgress: 1, completed: false },
+            { title: "とざんと届けだす", deadline: "2026-10-29", priority: "高", genre: "登山・アウトドア", note: "計画書の警察署・ウェブ提出手続き", progress: 0, maxProgress: 1, completed: false }
+        ];
+
+        // --- STREAMING_CHUNK:Google Calendar Link Generator Helper ---
+        window.openGoogleCalendar = function(taskTitle, deadlineStr, taskNote = '', genre = '') {
+            if (!deadlineStr || deadlineStr === '未定') {
+                showToast("⚠️ カレンダー登録には期限の日付設定が必要です。");
+                return;
+            }
+
+            // Google Calendar ISO Date format: YYYYMMDD
+            const dateParts = deadlineStr.split('-');
+            if (dateParts.length !== 3) return;
+            const startYear = dateParts[0];
+            const startMonth = dateParts[1];
+            const startDay = dateParts[2];
+
+            // 終日イベント用の開始日・終了日（終日イベントは終了日+1日）
+            const startDate = new Date(parseInt(startYear), parseInt(startMonth) - 1, parseInt(startDay));
+            const endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + 1);
+
+            const formatGCalDate = (d) => {
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${y}${m}${day}`;
+            };
+
+            const datesParam = `${formatGCalDate(startDate)}/${formatGCalDate(endDate)}`;
+            const titleParam = encodeURIComponent(`【タスク〆切】${taskTitle}`);
+            const detailsText = `ジャンル: ${genre || 'その他'}\n\n補足・メモ:\n${taskNote || 'なし'}\n\n(Smart Task Managerより連携)`;
+            const detailsParam = encodeURIComponent(detailsText);
+
+            // Google Calendar Web Create URL
+            const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${titleParam}&dates=${datesParam}&details=${detailsParam}&ctz=Asia/Tokyo`;
+
+            window.open(gcalUrl, '_blank');
+            showToast("📅 Googleカレンダーの登録画面を開きました！");
+        };
+
+        // --- STREAMING_CHUNK:Gemini AI Helper Functions... ---
+        async function callGemini(userQuery, systemPrompt = "", isJson = false) {
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=`;
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }]
+            };
+            if (systemPrompt) {
+                payload.systemInstruction = { parts: [{ text: systemPrompt }] };
+            }
+            if (isJson) {
+                payload.generationConfig = { responseMimeType: "application/json" };
+            }
+
+            let retries = 3;
+            let delay = 1000;
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const res = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    }
+                } catch (e) {
+                    console.warn("Gemini API Retry attempt:", i + 1, e);
+                }
+                await new Promise(r => setTimeout(r, delay));
+                delay *= 2;
+            }
+            return null;
+        }
+
+        // AI ジャンル判定＆ステップ自動予測
+        window.aiCategorizeAndBreakdown = async function() {
+            const title = document.getElementById('task-title').value.trim();
+            const note = document.getElementById('task-note').value.trim();
+            if (!title) {
+                showToast("AIによる提案を利用するには、まず「やる事」のタイトルを入力してください。");
+                return;
+            }
+
+            const btn = document.getElementById('btn-ai-auto');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> AI推論中...`;
+            btn.disabled = true;
+
+            const prompt = `タスク名: "${title}"\n補足: "${note}"`;
+            const systemPrompt = `あなたは優秀なタスク管理アシスタントです。入力されたタスクに基づき、以下のJSON形式で回答してください。
+ジャンル(genre)は次のいずれか1つを選んでください: ["学業・研究", "登山・アウトドア", "手続き・雑務", "イベント・交流", "就活・キャリア", "その他"]
+また、このタスクを完遂するのに適した「目標ステップ数(suggestedSteps: 1〜10の整数)」と「推奨の作業手順箇条書き(suggestedNote: 文字列)」を提案してください。
+
+JSON形式:
+{
+  "genre": "学業・研究",
+  "suggestedSteps": 5,
+  "suggestedNote": "1. 関連文献の収集\\n2. データの分析\\n3. 初稿の執筆\\n4. 見直し\\n5. 提出"
+}`;
+
+            try {
+                const resultText = await callGemini(prompt, systemPrompt, true);
+                if (resultText) {
+                    const res = JSON.parse(resultText);
+                    if (res.genre) document.getElementById('task-genre').value = res.genre;
+                    if (res.suggestedSteps) document.getElementById('task-max-progress').value = res.suggestedSteps;
+                    if (res.suggestedNote && !note) {
+                        document.getElementById('task-note').value = res.suggestedNote;
+                    }
+                    showToast("✨ AIがジャンルと分解ステップを推論しました！");
+                }
+            } catch (err) {
+                console.error("AI Auto categorize error:", err);
+                showToast("AI推論に失敗しました。時間をおいて再試行してください。");
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        };
+
+        // AIでざっくりしたメモから一括タスク自動生成
+        window.generateTasksWithAI = async function() {
+            const promptInput = document.getElementById('ai-prompt-input').value.trim();
+            if (!promptInput) return;
+
+            const btn = document.getElementById('btn-generate-ai-tasks');
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> タスク生成中...`;
+            btn.disabled = true;
+
+            const systemPrompt = `ユーザーの自由記述・メモから、具体的で実行可能なタスクのリスト(配列)を抽出・生成してください。
+本日の日付は ${new Date().toISOString().split('T')[0]} です。
+
+JSON出力フォーマット:
+[
+  {
+    "title": "タスク名",
+    "genre": "学業・研究" | "登山・アウトドア" | "手続き・雑務" | "イベント・交流" | "就活・キャリア" | "その他",
+    "priority": "絶対" | "高" | "低",
+    "maxProgress": 整数(1〜10),
+    "deadline": "YYYY-MM-DD" (または空文字),
+    "note": "具体的な補足手順や要点"
+  }
+]`;
+
+            try {
+                const resJson = await callGemini(promptInput, systemPrompt, true);
+                if (resJson) {
+                    const parsedTasks = JSON.parse(resJson);
+                    if (Array.isArray(parsedTasks) && parsedTasks.length > 0) {
+                        for (const task of parsedTasks) {
+                            const newTask = {
+                                title: task.title || "無題タスク",
+                                genre: task.genre || "その他",
+                                priority: task.priority || "高",
+                                deadline: task.deadline || "",
+                                maxProgress: task.maxProgress || 1,
+                                progress: 0,
+                                note: task.note || "",
+                                completed: false,
+                                createdAt: Date.now()
+                            };
+
+                            if (currentUser && db) {
+                                const tasksRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'tasks');
+                                await setDoc(doc(tasksRef), newTask);
+                            } else {
+                                tasks.push({ ...newTask, id: 'local-' + Date.now() + Math.random().toString(36).substr(2, 4) });
+                            }
+                        }
+                        renderTasks();
+                        updateStats();
+                        closeModal('ai-generator-modal');
+                        document.getElementById('ai-prompt-input').value = '';
+                        showToast(`✨ ${parsedTasks.length}件のタスクをAIが自動登録しました！`);
+                    }
+                }
+            } catch (err) {
+                console.error("AI Task Generation error:", err);
+                showToast("タスクのAI自動作成に失敗しました。");
+            } finally {
+                btn.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 inline mr-1"></i> AIでタスクを一括生成する`;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        };
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast-notification');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.classList.remove('hidden', 'opacity-0', 'translate-y-4');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-4');
+                setTimeout(() => toast.classList.add('hidden'), 300);
+            }, 3000);
+        }
+
+        async function initApp() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUser = user;
+                        document.getElementById('sync-status').classList.remove('hidden');
+                        listenToTasks();
+                    }
+                });
+            } catch (err) {
+                console.warn("Firestore fallback to memory mode:", err);
+                tasks = INITIAL_TASKS.map((t, idx) => ({ ...t, id: 'local-' + idx }));
+                renderTasks();
+                updateStats();
+            }
+        }
+
+        function listenToTasks() {
+            if (!currentUser) return;
+            const tasksRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'tasks');
+
+            unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
+                if (snapshot.empty && tasks.length === 0) {
+                    seedInitialData();
+                    return;
+                }
+                const loadedTasks = [];
+                snapshot.forEach(doc => {
+                    loadedTasks.push({ id: doc.id, ...doc.data() });
+                });
+                tasks = loadedTasks;
+                renderTasks();
+                updateStats();
+            });
+        }
+
+        async function seedInitialData() {
+            if (!currentUser) return;
+            const batch = writeBatch(db);
+            INITIAL_TASKS.forEach((t) => {
+                const docRef = doc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'tasks'));
+                batch.set(docRef, { ...t, createdAt: Date.now() });
+            });
+            await batch.commit();
+        }
+
+        window.addTask = async function(event) {
+            event.preventDefault();
+            const title = document.getElementById('task-title').value.trim();
+            const genre = document.getElementById('task-genre').value;
+            const noDeadline = document.getElementById('task-no-deadline').checked;
+            const deadline = noDeadline ? '' : document.getElementById('task-deadline').value;
+            const priority = document.getElementById('task-priority').value;
+            const maxProgress = parseInt(document.getElementById('task-max-progress').value) || 1;
+            const note = document.getElementById('task-note').value.trim();
+
+            if (!title) return;
+
+            const newTask = {
+                title,
+                genre: genre || "その他",
+                deadline: deadline || '',
+                priority,
+                note,
+                progress: 0,
+                maxProgress: maxProgress,
+                completed: false,
+                createdAt: Date.now()
+            };
+
+            if (currentUser && db) {
+                const tasksRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'tasks');
+                await setDoc(doc(tasksRef), newTask);
+            } else {
+                tasks.push({ ...newTask, id: 'local-' + Date.now() });
+                renderTasks();
+                updateStats();
+            }
+
+            closeModal('add-task-modal');
+            document.getElementById('add-task-form').reset();
+            toggleDeadlineInput(false);
+        };
+
+        window.updateProgress = async function(id, newProgress) {
+            newProgress = parseInt(newProgress);
+            const task = tasks.find(t => t.id === id);
+            const maxP = task ? (task.maxProgress || 1) : 1;
+            const isCompleted = newProgress >= maxP;
+
+            const taskCard = document.getElementById(`task-item-${id}`);
+
+            if (isCompleted && currentTab === 'active' && taskCard) {
+                taskCard.classList.add('task-row-leave');
+                setTimeout(() => {
+                    execUpdate(id, newProgress, isCompleted);
+                }, 380);
+            } else {
+                execUpdate(id, newProgress, isCompleted);
+            }
+        };
+
+        async function execUpdate(id, progress, completed) {
+            if (currentUser && db) {
+                const taskRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'tasks', id);
+                await updateDoc(taskRef, { progress, completed });
+            } else {
+                const idx = tasks.findIndex(t => t.id === id);
+                if (idx !== -1) {
+                    tasks[idx].progress = progress;
+                    tasks[idx].completed = completed;
+                    renderTasks();
+                    updateStats();
+                }
+            }
+        }
+
+        window.toggleComplete = async function(id, currentStatus) {
+            const task = tasks.find(t => t.id === id);
+            const maxP = task ? (task.maxProgress || 1) : 1;
+            const newStatus = !currentStatus;
+            const newProgress = newStatus ? maxP : 0;
+            updateProgress(id, newProgress);
+        };
+
+        window.deleteTask = async function(id) {
+            const taskCard = document.getElementById(`task-item-${id}`);
+            if (taskCard) {
+                taskCard.classList.add('task-row-leave');
+                setTimeout(async () => {
+                    if (currentUser && db) {
+                        await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'tasks', id));
+                    } else {
+                        tasks = tasks.filter(t => t.id !== id);
+                        renderTasks();
+                        updateStats();
+                    }
+                }, 350);
+            }
+        };
+
+        function renderTasks() {
+            const container = document.getElementById('tasks-container');
+            
+            let filtered = tasks.filter(t => {
+                if (currentTab === 'active' && t.completed) return false;
+                if (currentTab === 'completed' && !t.completed) return false;
+                if (filterPriority !== 'ALL' && t.priority !== filterPriority) return false;
+                if (filterGenre !== 'ALL' && (t.genre || 'その他') !== filterGenre) return false;
+                if (searchQuery) {
+                    const q = searchQuery.toLowerCase();
+                    return t.title.toLowerCase().includes(q) || (t.note && t.note.toLowerCase().includes(q)) || (t.genre && t.genre.toLowerCase().includes(q));
+                }
+                return true;
+            });
+
+            filtered.sort((a, b) => {
+                if (sortBy === 'deadline') {
+                    if (!a.deadline || a.deadline === '未定') return 1;
+                    if (!b.deadline || b.deadline === '未定') return -1;
+                    return a.deadline.localeCompare(b.deadline);
+                } else if (sortBy === 'priority') {
+                    return (PRIORITY_MAP[a.priority]?.rank || 99) - (PRIORITY_MAP[b.priority]?.rank || 99);
+                } else if (sortBy === 'progress') {
+                    return b.progress - a.progress;
+                }
+                return 0;
+            });
+
+            // ジャンルフィルタ用タグバーの更新
+            renderGenreFilterTags();
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-16 bg-slate-800/40 rounded-2xl border border-slate-700/50">
+                        <i data-lucide="check-circle-2" class="w-12 h-12 text-slate-500 mx-auto mb-3 opacity-60"></i>
+                        <p class="text-slate-300 font-medium">該当するタスクはありません</p>
+                        <p class="text-xs text-slate-500 mt-1">タスクの新規追加またはフィルターの調整を行ってください</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            if (viewMode === 'table') {
+                container.innerHTML = `
+                    <div class="overflow-x-auto bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-xl">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-700/80 text-xs font-semibold text-slate-400 uppercase bg-slate-800/80">
+                                    <th class="py-3.5 px-4 w-12 text-center">完了</th>
+                                    <th class="py-3.5 px-4 min-w-[220px]">タスク内容 & 補足説明</th>
+                                    <th class="py-3.5 px-4 w-32">ジャンル</th>
+                                    <th class="py-3.5 px-4 w-36">期限 / リマインド</th>
+                                    <th class="py-3.5 px-4 w-24">優先度</th>
+                                    <th class="py-3.5 px-4 min-w-[200px]">進捗スライダー</th>
+                                    <th class="py-3.5 px-4 w-16 text-center">削除</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-700/50 text-sm">
+                                ${filtered.map(t => renderTableRow(t)).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        ${filtered.map(t => renderCard(t)).join('')}
+                    </div>
+                `;
+            }
+
+            lucide.createIcons();
+        }
+
+        function renderGenreFilterTags() {
+            const genres = ["ALL", "学業・研究", "登山・アウトドア", "手続き・雑務", "イベント・交流", "就活・キャリア", "その他"];
+            const tagContainer = document.getElementById('genre-filter-tags');
+            if (!tagContainer) return;
+
+            tagContainer.innerHTML = genres.map(g => {
+                const active = filterGenre === g;
+                const activeClass = active 
+                    ? 'bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-md shadow-cyan-500/20' 
+                    : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 border-slate-700';
+                const label = g === 'ALL' ? '全ジャンル' : g;
+                return `
+                    <button onclick="setGenreFilter('${g}')" class="px-3 py-1.5 text-xs rounded-xl border transition-all whitespace-nowrap touch-target ${activeClass}">
+                        ${label}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        window.setGenreFilter = function(genre) {
+            filterGenre = genre;
+            renderTasks();
+        };
+
+        function renderTableRow(t) {
+            const priorityStyle = PRIORITY_MAP[t.priority]?.badgeClass || 'bg-slate-700 text-slate-300';
+            const genreStyle = GENRE_COLORS[t.genre] || 'bg-slate-700/50 text-slate-300 border-slate-600';
+            const deadlineBadge = renderDeadlineBadge(t.deadline);
+            const hasDeadline = t.deadline && t.deadline !== '未定';
+
+            return `
+                <tr id="task-item-${t.id}" class="hover:bg-slate-700/30 transition-all duration-150 ${t.completed ? 'opacity-60 bg-slate-900/30' : ''}">
+                    <td class="py-3 px-4 text-center align-top pt-4">
+                        <button onclick="toggleComplete('${t.id}', ${t.completed})" class="touch-target w-7 h-7 rounded-lg border border-slate-600 flex items-center justify-center transition-all ${t.completed ? 'bg-cyan-500 border-cyan-500 text-slate-900' : 'hover:border-cyan-400 bg-slate-800'}">
+                            ${t.completed ? '<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>' : ''}
+                        </button>
+                    </td>
+                    <td class="py-3 px-4 align-top">
+                        <div class="font-semibold text-slate-100 text-base ${t.completed ? 'line-through text-slate-400' : ''}">
+                            ${escapeHtml(t.title)}
+                        </div>
+                        ${showDetails && t.note ? `
+                            <p class="text-xs text-slate-400 mt-1 bg-slate-900/40 p-2 rounded-lg border border-slate-800/80 leading-relaxed whitespace-pre-line">
+                                <i data-lucide="file-text" class="w-3 h-3 inline mr-1 text-slate-500"></i>${escapeHtml(t.note)}
+                            </p>
+                        ` : ''}
+                    </td>
+                    <td class="py-3 px-4 align-top pt-3.5">
+                        <span class="px-2.5 py-1 text-xs font-semibold rounded-lg border ${genreStyle}">
+                            ${t.genre || 'その他'}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 whitespace-nowrap align-top pt-3.5">
+                        <div class="flex flex-col items-start gap-1">
+                            ${deadlineBadge}
+                            ${hasDeadline ? `
+                                <button onclick="openGoogleCalendar('${escapeHtml(t.title)}', '${t.deadline}', '${escapeHtml(t.note || '')}', '${t.genre || ''}')" class="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 font-medium hover:underline mt-0.5">
+                                    <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> カレンダー追加
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                    <td class="py-3 px-4 align-top pt-3.5">
+                        <span class="px-2.5 py-1 text-xs font-bold rounded-full border ${priorityStyle}">
+                            ${t.priority}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 align-top pt-3">
+                        ${renderSliderUI(t)}
+                    </td>
+                    <td class="py-3 px-4 text-center align-top pt-3">
+                        <button onclick="deleteTask('${t.id}')" class="p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors touch-target">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        function renderCard(t) {
+            const priorityStyle = PRIORITY_MAP[t.priority]?.badgeClass || 'bg-slate-700 text-slate-300';
+            const genreStyle = GENRE_COLORS[t.genre] || 'bg-slate-700/50 text-slate-300 border-slate-600';
+            const deadlineBadge = renderDeadlineBadge(t.deadline);
+            const hasDeadline = t.deadline && t.deadline !== '未定';
+
+            return `
+                <div id="task-item-${t.id}" class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-4 shadow-lg flex flex-col justify-between hover:border-slate-600 transition-all ${t.completed ? 'opacity-60' : ''}">
+                    <div>
+                        <!-- ヘッダー (ジャンル・優先度 & 期限) -->
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="px-2.5 py-0.5 text-xs font-semibold rounded-lg border ${genreStyle}">
+                                    ${t.genre || 'その他'}
+                                </span>
+                                <span class="px-2.5 py-0.5 text-xs font-bold rounded-full border ${priorityStyle}">
+                                    ${t.priority}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                ${deadlineBadge}
+                                <button onclick="deleteTask('${t.id}')" class="p-1.5 text-slate-400 hover:text-red-400 rounded-lg touch-target ml-1">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- タイトル & チェック -->
+                        <div class="flex items-start gap-2.5 mb-2">
+                            <button onclick="toggleComplete('${t.id}', ${t.completed})" class="touch-target mt-0.5 min-w-[24px] w-6 h-6 rounded-lg border border-slate-600 flex items-center justify-center transition-all ${t.completed ? 'bg-cyan-500 border-cyan-500 text-slate-900' : 'bg-slate-900 hover:border-cyan-400'}">
+                                ${t.completed ? '<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>' : ''}
+                            </button>
+                            <h3 class="font-bold text-slate-100 text-base leading-snug ${t.completed ? 'line-through text-slate-400' : ''}">
+                                ${escapeHtml(t.title)}
+                            </h3>
+                        </div>
+
+                        <!-- 補足説明 -->
+                        ${showDetails && t.note ? `
+                            <p class="text-xs text-slate-300 mb-3 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 leading-relaxed pl-3 border-l-2 border-l-cyan-500 whitespace-pre-line">
+                                ${escapeHtml(t.note)}
+                            </p>
+                        ` : ''}
+                    </div>
+
+                    <!-- 進捗スライダー & リマインドボタン部分 -->
+                    <div class="mt-3 pt-3 border-t border-slate-700/50 space-y-2">
+                        ${renderSliderUI(t)}
+                        
+                        ${hasDeadline ? `
+                            <button onclick="openGoogleCalendar('${escapeHtml(t.title)}', '${t.deadline}', '${escapeHtml(t.note || '')}', '${t.genre || ''}')" class="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-900/60 hover:bg-slate-900 text-cyan-400 text-xs font-semibold rounded-xl border border-cyan-500/30 transition-all touch-target mt-2">
+                                <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> Googleカレンダーに前日リマインド登録
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 滑らかなスライダー構造 UI
+        function renderSliderUI(t) {
+            const maxP = t.maxProgress || 1;
+            const percentage = Math.round((t.progress / maxP) * 100);
+            return `
+                <div class="space-y-1.5">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="text-slate-400 font-medium">進捗状況</span>
+                        <span id="slider-val-${t.id}" class="text-cyan-400 font-bold bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20">
+                            ${t.progress} / ${maxP} (${percentage}%)
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <input type="range" min="0" max="${maxP}" step="1" value="${t.progress}" 
+                            onchange="updateProgress('${t.id}', this.value)"
+                            oninput="const val = parseInt(this.value); const max = ${maxP}; const el = document.getElementById('slider-val-${t.id}'); if (el) el.innerText = val + ' / ' + max + ' (' + Math.round((val/max)*100) + '%)';"
+                            class="w-full h-2 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-cyan-500 focus:outline-none">
+                    </div>
+                </div>
+            `;
+        }
+
+        // 日付のグラフィカルバッジ（今日・明日・期限切れ・残り日数・期限なし表示）
+        function renderDeadlineBadge(dateStr) {
+            if (!dateStr || dateStr === '未定' || dateStr === '') {
+                return `<span class="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/80"><i data-lucide="calendar-off" class="w-3.5 h-3.5 text-slate-500"></i> 期限なし</span>`;
+            }
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const deadline = new Date(dateStr);
+            const deadlineZero = new Date(dateStr);
+            deadlineZero.setHours(0, 0, 0, 0);
+
+            const diffDays = Math.round((deadlineZero - today) / (1000 * 60 * 60 * 24));
+            
+            const month = deadline.getMonth() + 1;
+            const day = deadline.getDate();
+            const dateFormatted = `${month}/${day}`;
+
+            if (diffDays < 0) {
+                return `
+                    <span class="inline-flex items-center gap-1 text-xs font-bold bg-red-500/20 text-red-400 px-2.5 py-1 rounded-lg border border-red-500/40 shadow-sm" title="期限切れ">
+                        <i data-lucide="alert-triangle" class="w-3.5 h-3.5 animate-pulse text-red-400"></i> ${dateFormatted} (期限切)
+                    </span>
+                `;
+            } else if (diffDays === 0) {
+                return `
+                    <span class="inline-flex items-center gap-1 text-xs font-bold bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-lg border border-amber-500/40 shadow-sm">
+                        <i data-lucide="clock" class="w-3.5 h-3.5 text-amber-300"></i> 今日期限
+                    </span>
+                `;
+            } else if (diffDays === 1) {
+                return `
+                    <span class="inline-flex items-center gap-1 text-xs font-bold bg-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded-lg border border-cyan-500/40">
+                        <i data-lucide="calendar" class="w-3.5 h-3.5 text-cyan-400"></i> 明日 (${dateFormatted})
+                    </span>
+                `;
+            } else if (diffDays <= 3) {
+                return `
+                    <span class="inline-flex items-center gap-1 text-xs font-semibold bg-blue-500/20 text-blue-300 px-2.5 py-1 rounded-lg border border-blue-500/30">
+                        <i data-lucide="calendar" class="w-3.5 h-3.5 text-blue-400"></i> ${dateFormatted} (あと${diffDays}日)
+                    </span>
+                `;
+            } else {
+                return `
+                    <span class="inline-flex items-center gap-1 text-xs font-medium bg-slate-800 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-700">
+                        <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i> ${dateFormatted}
+                    </span>
+                `;
+            }
+        }
+
+        function updateStats() {
+            const total = tasks.length;
+            const completed = tasks.filter(t => t.completed).length;
+            const active = total - completed;
+
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-active').innerText = active;
+            document.getElementById('stat-completed').innerText = completed;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+
+        // Controls
+        window.toggleDetailsMode = function() {
+            showDetails = !showDetails;
+            const btn = document.getElementById('btn-toggle-details');
+            if (showDetails) {
+                btn.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 transition-all";
+                btn.innerHTML = `<i data-lucide="eye" class="w-4 h-4"></i> 補足説明: 表示中`;
+            } else {
+                btn.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl bg-slate-800 text-slate-400 border border-slate-700 hover:text-slate-200 transition-all";
+                btn.innerHTML = `<i data-lucide="eye-off" class="w-4 h-4"></i> 補足説明: 非表示 (コンパクト)`;
+            }
+            renderTasks();
+        };
+
+        window.setTab = function(tab) {
+            currentTab = tab;
+            const tabActive = document.getElementById('tab-btn-active');
+            const tabCompleted = document.getElementById('tab-btn-completed');
+            
+            if (tab === 'active') {
+                tabActive.className = "flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-xl bg-cyan-600 text-white shadow-lg shadow-cyan-500/20 transition-all";
+                tabCompleted.className = "flex-1 md:flex-none px-4 py-2 text-xs font-medium rounded-xl text-slate-400 hover:text-slate-200 transition-all";
+            } else {
+                tabCompleted.className = "flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-xl bg-cyan-600 text-white shadow-lg shadow-cyan-500/20 transition-all";
+                tabActive.className = "flex-1 md:flex-none px-4 py-2 text-xs font-medium rounded-xl text-slate-400 hover:text-slate-200 transition-all";
+            }
+            renderTasks();
+        };
+
+        window.setViewMode = function(mode) {
+            viewMode = mode;
+            document.getElementById('btn-view-table').className = mode === 'table' ? 'p-2 bg-slate-700 text-cyan-400 rounded-lg' : 'p-2 text-slate-400 hover:text-slate-200 rounded-lg';
+            document.getElementById('btn-view-card').className = mode === 'card' ? 'p-2 bg-slate-700 text-cyan-400 rounded-lg' : 'p-2 text-slate-400 hover:text-slate-200 rounded-lg';
+            renderTasks();
+        };
+        window.toggleDeadlineInput = function(disabled) {
+            const dateInput = document.getElementById('task-deadline');
+            if (disabled) {
+                dateInput.value = '';
+                dateInput.disabled = true;
+                dateInput.classList.add('opacity-40', 'cursor-not-allowed');
+            } else {
+                dateInput.disabled = false;
+                dateInput.classList.remove('opacity-40', 'cursor-not-allowed');
+            }
+        };
+
+        window.openModal = function(id) {
+            document.getElementById(id).classList.remove('hidden');
+            document.getElementById(id).classList.add('flex');
+        };
+
+        window.closeModal = function(id) {
+            document.getElementById(id).classList.add('hidden');
+            document.getElementById(id).classList.remove('flex');
+        };
+
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            searchQuery = e.target.value;
+            renderTasks();
+        });
+
+        document.getElementById('filter-priority').addEventListener('change', (e) => {
+            filterPriority = e.target.value;
+            renderTasks();
+        });
+
+        document.getElementById('sort-by').addEventListener('change', (e) => {
+            sortBy = e.target.value;
+            renderTasks();
+        });
+
+        window.onload = () => {
+            lucide.createIcons();
+            initApp();
+        };
+    </script>
+
+    <div class="max-w-6xl mx-auto px-4 py-4 md:py-6">
+        
+        <!-- ヘッダー -->
+        <header class="flex items-center justify-between gap-4 mb-6">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-xl shadow-lg shadow-cyan-500/20">
+                    <i data-lucide="check-square" class="w-6 h-6 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold">Task Manager</h1>
+                    <p class="text-xs text-slate-400 flex items-center gap-2">
+                        <span>リアルタイムクラウド同期</span>
+                        <span id="sync-status" class="hidden text-emerald-400 flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> オンライン
+                        </span>
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <!-- AI自動一括生成アシスタント起動ボタン -->
+                <button onclick="openModal('ai-generator-modal')" class="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-500/25 transition-all touch-target">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i> AIタスク自動作成
+                </button>
+
+                <!-- 補足切り替えボタン -->
+                <button id="btn-toggle-details" onclick="toggleDetailsMode()" class="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 transition-all touch-target">
+                    <i data-lucide="eye" class="w-4 h-4"></i> 補足説明: 表示中
+                </button>
+
+                <!-- PC用追加ボタン -->
+                <button onclick="openModal('add-task-modal')" class="hidden md:flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-lg shadow-cyan-500/25 transition-all">
+                    <i data-lucide="plus" class="w-4 h-4"></i> タスク追加
+                </button>
+            </div>
+        </header>
+
+        <!-- ジャンル別フィルタータグバー -->
+        <div class="flex items-center gap-2 overflow-x-auto pb-2 mb-4 no-scrollbar" id="genre-filter-tags"></div>
+
+        <!-- サマリーステータス -->
+        <div class="grid grid-cols-3 gap-3 md:gap-4 mb-5">
+            <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-3 md:p-4 flex items-center gap-3">
+                <div class="p-2.5 bg-blue-500/10 text-blue-400 rounded-xl hidden sm:block">
+                    <i data-lucide="list-todo" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <p class="text-[11px] md:text-xs text-slate-400 font-medium">全タスク</p>
+                    <p id="stat-total" class="text-lg md:text-xl font-bold">0</p>
+                </div>
+            </div>
+            <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-3 md:p-4 flex items-center gap-3">
+                <div class="p-2.5 bg-amber-500/10 text-amber-400 rounded-xl hidden sm:block">
+                    <i data-lucide="clock" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <p class="text-[11px] md:text-xs text-slate-400 font-medium">進行中</p>
+                    <p id="stat-active" class="text-lg md:text-xl font-bold">0</p>
+                </div>
+            </div>
+            <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-3 md:p-4 flex items-center gap-3">
+                <div class="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl hidden sm:block">
+                    <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <p class="text-[11px] md:text-xs text-slate-400 font-medium">達成完了</p>
+                    <p id="stat-completed" class="text-lg md:text-xl font-bold">0</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- タブ（進行中 / 完了済み） -->
+        <div class="flex items-center gap-2 mb-4 bg-slate-800/80 p-1.5 rounded-2xl border border-slate-700/80">
+            <button id="tab-btn-active" onclick="setTab('active')" class="flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-xl bg-cyan-600 text-white shadow-lg shadow-cyan-500/20 transition-all">
+                進行中タスク
+            </button>
+            <button id="tab-btn-completed" onclick="setTab('completed')" class="flex-1 md:flex-none px-4 py-2 text-xs font-medium rounded-xl text-slate-400 hover:text-slate-200 transition-all">
+                完了済み（自動保管）
+            </button>
+        </div>
+
+        <!-- 検索・フィルター・表示切替 -->
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-3.5 mb-5 shadow-lg backdrop-blur-md flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+            <div class="flex flex-1 items-center gap-2">
+                <div class="relative flex-1">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="search-input" placeholder="タスク・補足メモを検索..." class="w-full bg-slate-900/80 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500">
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 justify-between md:justify-end">
+                <select id="filter-priority" class="bg-slate-900/80 border border-slate-700 text-slate-300 text-xs rounded-xl px-2.5 py-2 focus:outline-none focus:border-cyan-500">
+                    <option value="ALL">全 優先度</option>
+                    <option value="絶対">絶対</option>
+                    <option value="高">高</option>
+                    <option value="低">低</option>
+                </select>
+
+                <select id="sort-by" class="bg-slate-900/80 border border-slate-700 text-slate-300 text-xs rounded-xl px-2.5 py-2 focus:outline-none focus:border-cyan-500">
+                    <option value="deadline">期限順</option>
+                    <option value="priority">優先度順</option>
+                    <option value="progress">進捗順</option>
+                </select>
+
+                <div class="hidden md:flex items-center bg-slate-900/80 p-1 rounded-xl border border-slate-700/80">
+                    <button id="btn-view-table" onclick="setViewMode('table')" class="p-1.5 text-slate-400 hover:text-slate-200 rounded-lg">
+                        <i data-lucide="table" class="w-4 h-4"></i>
+                    </button>
+                    <button id="btn-view-card" onclick="setViewMode('card')" class="p-1.5 bg-slate-700 text-cyan-400 rounded-lg">
+                        <i data-lucide="layout-grid" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- タスク一覧エリア -->
+        <div id="tasks-container"></div>
+    </div>
+
+    <!-- スマホ専用 フローティング追加ボタン -->
+    <button onclick="openModal('add-task-modal')" class="md:hidden fixed right-5 bottom-6 z-40 w-14 h-14 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-full flex items-center justify-center shadow-xl shadow-cyan-500/30 active:scale-95 transition-transform touch-target">
+        <i data-lucide="plus" class="w-7 h-7"></i>
+    </button>
+
+    <!-- モーダル: タスク追加 -->
+    <div id="add-task-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl relative my-8">
+            <div class="flex justify-between items-center mb-5">
+                <h2 class="text-lg font-bold flex items-center gap-2">
+                    <i data-lucide="plus-circle" class="w-5 h-5 text-cyan-400"></i> 新規タスク追加
+                </h2>
+                <button onclick="closeModal('add-task-modal')" class="text-slate-400 hover:text-slate-200 touch-target p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="add-task-form" onsubmit="addTask(event)" class="space-y-4">
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-xs font-semibold text-slate-300">やる事（タイトル） <span class="text-red-400">*</span></label>
+                        <button type="button" id="btn-ai-auto" onclick="aiCategorizeAndBreakdown()" class="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 font-semibold">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> AI自動判定・分解
+                        </button>
+                    </div>
+                    <input type="text" id="task-title" required placeholder="例: 物理化学レポ / 富士山登山準備" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-cyan-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">ジャンル・カテゴリ</label>
+                        <select id="task-genre" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500">
+                            <option value="学業・研究">📚 学業・研究</option>
+                            <option value="登山・アウトドア">⛰️ 登山・アウトドア</option>
+                            <option value="手続き・雑務">🏠 手続き・雑務</option>
+                            <option value="イベント・交流">🎉 イベント・交流</option>
+                            <option value="就活・キャリア">💼 就活・キャリア</option>
+                            <option value="その他">📌 その他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">優先度</label>
+                        <select id="task-priority" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500">
+                            <option value="絶対">絶対</option>
+                            <option value="高" selected>高</option>
+                            <option value="低">低</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-xs font-semibold text-slate-300">期限</label>
+                            <label class="inline-flex items-center gap-1 text-[11px] text-slate-400 cursor-pointer">
+                                <input type="checkbox" id="task-no-deadline" onchange="toggleDeadlineInput(this.checked)" class="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0">
+                                期限なし
+                            </label>
+                        </div>
+                        <input type="date" id="task-deadline" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">
+                            目標ステップ数 (?/N)
+                        </label>
+                        <input type="number" id="task-max-progress" min="1" max="100" value="1" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500" placeholder="1">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">補足説明・メモ（AI分解リスト等）</label>
+                    <textarea id="task-note" rows="3" placeholder="タスクの補足やAIに分解してもらったステップなど..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 resize-none"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-3">
+                    <button type="button" onclick="closeModal('add-task-modal')" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-700">
+                        キャンセル
+                    </button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20">
+                        追加する
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- モーダル: AI一括タスク生成アシスタント -->
+    <div id="ai-generator-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-slate-800 border border-purple-500/30 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative my-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold flex items-center gap-2 text-purple-300">
+                    <i data-lucide="sparkles" class="w-5 h-5 text-purple-400"></i> AIスマートタスク生成
+                </h2>
+                <button onclick="closeModal('ai-generator-modal')" class="text-slate-400 hover:text-slate-200 touch-target p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-slate-300 mb-4 leading-relaxed bg-purple-950/40 p-3 rounded-xl border border-purple-800/40">
+                やりたいことや雑多なメモ（例：「来週末に北アルプス行く計画立てて」「今週の大学の課題リスト：物理化学レポ（金曜まで）とインフォーマ第7章」）を入力すると、AIが自動でジャンル分類・期限抽出・ステップ数設定付きでタスクを一括登録します。
+            </p>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">自由記述メモ・思考ログ</label>
+                    <textarea id="ai-prompt-input" rows="4" placeholder="例: 今週末のキャンプ準備。テント確認、食材買い出し、ルート検索。あと来週の月曜までに学業の実験レポートを完成させる。" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-purple-500 resize-none"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeModal('ai-generator-modal')" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-700">
+                        キャンセル
+                    </button>
+                    <button type="button" id="btn-generate-ai-tasks" onclick="generateTasksWithAI()" class="px-5 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/25 flex items-center gap-1.5">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i> AIでタスクを一括生成する
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- トースト通知 -->
+    <div id="toast-notification" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 border border-cyan-500/50 text-cyan-200 px-4 py-3 rounded-2xl shadow-2xl z-50 transition-all duration-300 hidden opacity-0 translate-y-4 flex items-center gap-2">
+        <i data-lucide="check-circle" class="w-5 h-5 text-cyan-400"></i>
+        <span id="toast-msg" class="text-xs font-semibold"></span>
+    </div>
+
+</body>
+</html>
