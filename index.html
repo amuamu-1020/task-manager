@@ -106,4 +106,575 @@
         <div class="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-lg"><i data-lucide="bar-chart-3" class="w-5 h-5"></i></div>
         <div>
           <div class="text-xs text-slate-400 font-medium">平均進捗</div>
-          <div id="stat-progress" class="text-lg
+          <div id="stat-progress" class="text-lg font-bold text-slate-100">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-6 bg-slate-800/40 p-3 rounded-xl border border-slate-800">
+      <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
+        <button onclick="setTab('active')" id="tab-active" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-500 text-white shadow-sm whitespace-nowrap">未完了</button>
+        <button onclick="setTab('completed')" id="tab-completed" class="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:bg-slate-800 whitespace-nowrap">完了済み</button>
+        <div class="h-4 w-[1px] bg-slate-700 mx-1"></div>
+        <select id="genre-filter" onchange="render()" class="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg px-2.5 py-1.5 outline-none focus:border-sky-500">
+          <option value="all">すべてのジャンル</option>
+        </select>
+      </div>
+
+      <div class="flex items-center gap-2 justify-between md:justify-end">
+        <select id="sort-by" onchange="render()" class="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg px-2.5 py-1.5 outline-none focus:border-sky-500">
+          <option value="dueDate">期限が近い順</option>
+          <option value="priority">優先度順</option>
+          <option value="created">作成日順</option>
+        </select>
+        <div class="flex bg-slate-900 border border-slate-700 rounded-lg p-0.5">
+          <button onclick="setViewMode('card')" id="view-card" class="p-1.5 rounded text-sky-400 bg-slate-800"><i data-lucide="layout-grid" class="w-3.5 h-3.5"></i></button>
+          <button onclick="setViewMode('table')" id="view-table" class="p-1.5 rounded text-slate-400 hover:text-slate-200"><i data-lucide="table" class="w-3.5 h-3.5"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task List Container -->
+    <div id="task-container" class="space-y-3">
+      <!-- Tasks rendered here -->
+    </div>
+    <div id="empty-state" class="hidden py-16 text-center">
+      <div class="w-12 h-12 bg-slate-800 text-slate-500 rounded-2xl flex items-center gap-0 justify-center mx-auto mb-3">
+        <i data-lucide="check-circle" class="w-6 h-6"></i>
+      </div>
+      <p class="text-slate-400 text-sm font-medium">表示できるタスクがありません</p>
+      <p class="text-slate-500 text-xs mt-1">新しいタスクを追加してください</p>
+    </div>
+  </div>
+
+  <!-- Mobile Floating Add Button -->
+  <button onclick="openTaskModal()" class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-sky-500 to-indigo-600 text-white rounded-full shadow-2xl shadow-sky-500/50 flex items-center justify-center text-2xl z-40 hover:scale-105 active:scale-95 transition-all">
+    <i data-lucide="plus" class="w-7 h-7"></i>
+  </button>
+
+  <!-- Create / Edit Task Modal -->
+  <div id="task-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+      <div class="flex justify-between items-center px-6 py-4 border-b border-slate-800">
+        <h3 id="modal-title" class="font-bold text-slate-100 flex items-center gap-2">
+          <i data-lucide="edit-3" class="w-4 h-4 text-sky-400"></i> タスクの編集
+        </h3>
+        <button onclick="closeTaskModal()" class="text-slate-400 hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form id="task-form" onsubmit="handleSaveTask(event)" class="p-6 space-y-4">
+        <input type="hidden" id="edit-task-id" value="">
+        
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">やる事 (タイトル) *</label>
+          <input type="text" id="input-title" required placeholder="例: 物理化学レポート提出" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-sky-500 transition-colors">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-semibold text-slate-400">期限</label>
+              <label class="text-[11px] text-slate-400 flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" id="input-no-date" onchange="toggleNoDate(this.checked)" class="rounded bg-slate-950 border-slate-800 text-sky-500 focus:ring-0"> 期限なし
+              </label>
+            </div>
+            <input type="date" id="input-date" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">優先度</label>
+            <select id="input-priority" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+              <option value="絶対">絶対 (高)</option>
+              <option value="高" selected>高</option>
+              <option value="低">低</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">ジャンル</label>
+            <input type="text" id="input-genre" placeholder="例: 学業・実験" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">目標ステップ (0/?)</label>
+            <input type="number" id="input-max-step" min="1" max="50" value="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">補足説明 (メモ)</label>
+          <textarea id="input-notes" rows="2" placeholder="詳細や必要なリンクなどを入力" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 resize-none"></textarea>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeTaskModal()" class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200">キャンセル</button>
+          <button type="submit" class="px-5 py-2 text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-white rounded-xl shadow-lg shadow-sky-500/20">保存する</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- AI Modal -->
+  <div id="ai-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+      <div class="flex justify-between items-center px-6 py-4 border-b border-slate-800 bg-indigo-950/30">
+        <h3 class="font-bold text-indigo-300 flex items-center gap-2">
+          <i data-lucide="sparkles" class="w-5 h-5 text-indigo-400"></i> AIタスク自動生成
+        </h3>
+        <button onclick="closeAiModal()" class="text-slate-400 hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-6 space-y-4">
+        <p class="text-xs text-slate-400 leading-relaxed">
+          ざっくりとしたやりたい事や箇条書きを入力すると、AIが「タスク名」「優先度」「ジャンル」「ステップ数」を自動判定して一括生成します。
+        </p>
+        <textarea id="ai-prompt" rows="4" placeholder="例: 今週末の山行計画を立てる。あと来週火曜日までの物理化学レポートと奨学金の申請書類の確認。" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 resize-none"></textarea>
+        
+        <div class="flex justify-end gap-2 pt-2">
+          <button onclick="closeAiModal()" class="px-4 py-2 text-xs font-medium text-slate-400">キャンセル</button>
+          <button id="ai-submit-btn" onclick="generateTasksWithAi()" class="px-5 py-2 text-xs font-semibold bg-gradient-to-r from-indigo-600 to-sky-600 text-white rounded-xl shadow-lg shadow-indigo-500/20 flex items-center gap-1.5">
+            <i data-lucide="wand-2" class="w-4 h-4"></i> AIで自動抽出・生成
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Initial State & Storage ---
+    const STORAGE_KEY = 'task_manager_pro_data_v2';
+    
+    let defaultTasks = [
+      { id: '1', title: '山行計画立てる', dueDate: '', priority: '低', genre: '趣味・登山', currentStep: 0, maxStep: 5, notes: '両神山の登山ルート調べと時間計算', completed: false, created: Date.now() - 500000 },
+      { id: '2', title: '物理化学レポ', dueDate: '2026-11-04', priority: '絶対', genre: '学業', currentStep: 1, maxStep: 3, notes: '実験データ整理とグラフ作成', completed: false, created: Date.now() - 400000 },
+      { id: '3', title: '合成レポ', dueDate: '2026-11-08', priority: '絶対', genre: '学業', currentStep: 0, maxStep: 1, notes: '', completed: false, created: Date.now() - 300000 },
+      { id: '4', title: 'テント打ち上げ行先決定', dueDate: '2026-11-10', priority: '高', genre: 'イベント', currentStep: 1, maxStep: 1, notes: 'お店予約候補3つ出す', completed: true, created: Date.now() - 200000 }
+    ];
+
+    let tasks = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultTasks;
+    let currentTab = 'active';
+    let viewMode = 'card'; // card or table
+    let isCompact = false;
+
+    // --- Save & Init ---
+    function saveStorage() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      render();
+    }
+
+    function init() {
+      lucide.createIcons();
+      render();
+    }
+
+    // --- Helpers ---
+    function formatDateBadge(dueDate) {
+      if (!dueDate) return { label: '期限なし', class: 'bg-slate-800 text-slate-400 border-slate-700' };
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const target = new Date(dueDate + 'T00:00:00');
+      const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 0) {
+        return { label: `期限切れ (${Math.abs(diffDays)}日超過)`, class: 'bg-rose-500/10 text-rose-400 border-rose-500/30 font-bold' };
+      } else if (diffDays === 0) {
+        return { label: '今日が期限', class: 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold' };
+      } else if (diffDays === 1) {
+        return { label: '明日まで', class: 'bg-sky-500/20 text-sky-300 border-sky-500/30' };
+      } else {
+        return { label: `あと${diffDays}日 (${dueDate})`, class: 'bg-slate-800 text-slate-300 border-slate-700' };
+      }
+    }
+
+    function getPriorityBadge(priority) {
+      switch(priority) {
+        case '絶対': return '<span class="px-2 py-0.5 text-[11px] font-bold rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">絶対</span>';
+        case '高': return '<span class="px-2 py-0.5 text-[11px] font-medium rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">高</span>';
+        default: return '<span class="px-2 py-0.5 text-[11px] font-medium rounded bg-slate-800 text-slate-400 border border-slate-700">低</span>';
+      }
+    }
+
+    function addToGoogleCalendar(title, dueDate, notes) {
+      if (!dueDate) return;
+      const cleanDate = dueDate.replace(/-/g, '');
+      const details = encodeURIComponent(notes || 'Task Manager Proより追加されたタスク');
+      const titleEnc = encodeURIComponent(`【〆切】${title}`);
+      
+      // 前日9:00のリマインダー設定URL
+      const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${titleEnc}&dates=${cleanDate}/${cleanDate}&details=${details}&remind=1440`;
+      window.open(url, '_blank');
+    }
+
+    // --- Render Logic ---
+    function render() {
+      // 1. Update Genres Dropdown
+      const genreFilter = document.getElementById('genre-filter');
+      const genres = Array.from(new Set(tasks.map(t => t.genre || '未分類')));
+      const currentGenreVal = genreFilter.value;
+      genreFilter.innerHTML = '<option value="all">すべてのジャンル</option>' + 
+        genres.map(g => `<option value="${g}">${g}</option>`).join('');
+      genreFilter.value = currentGenreVal;
+
+      // 2. Filter & Sort
+      const selectedGenre = genreFilter.value;
+      const sortBy = document.getElementById('sort-by').value;
+
+      let filtered = tasks.filter(t => {
+        const matchesTab = (currentTab === 'active') ? !t.completed : t.completed;
+        const matchesGenre = (selectedGenre === 'all') ? true : (t.genre || '未分類') === selectedGenre;
+        return matchesTab && matchesGenre;
+      });
+
+      filtered.sort((a, b) => {
+        if (sortBy === 'dueDate') {
+          if (!a.dueDate) return 1;
+          if (!b.dueDate) return -1;
+          return new Date(a.dueDate) - new Date(b.dueDate);
+        } else if (sortBy === 'priority') {
+          const pMap = { '絶対': 3, '高': 2, '低': 1 };
+          return pMap[b.priority] - pMap[a.priority];
+        } else {
+          return b.created - a.created;
+        }
+      });
+
+      // 3. Stats Update
+      const activeCount = tasks.filter(t => !t.completed).length;
+      const completedCount = tasks.filter(t => t.completed).length;
+      const urgentCount = tasks.filter(t => !t.completed && t.dueDate && (new Date(t.dueDate + 'T00:00:00') - new Date().setHours(0,0,0,0)) <= 86400000).length;
+      const avgProgress = tasks.length ? Math.round((tasks.reduce((acc, t) => acc + (t.currentStep / t.maxStep), 0) / tasks.length) * 100) : 0;
+
+      document.getElementById('stat-active').innerText = activeCount;
+      document.getElementById('stat-completed').innerText = completedCount;
+      document.getElementById('stat-urgent').innerText = urgentCount;
+      document.getElementById('stat-progress').innerText = `${avgProgress}%`;
+
+      // 4. Task List Render
+      const container = document.getElementById('task-container');
+      const emptyState = document.getElementById('empty-state');
+
+      if (filtered.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+      } else {
+        emptyState.classList.add('hidden');
+        if (viewMode === 'card') {
+          container.className = "grid grid-cols-1 gap-3";
+          container.innerHTML = filtered.map(t => renderTaskCard(t)).join('');
+        } else {
+          container.className = "overflow-x-auto bg-slate-900 border border-slate-800 rounded-xl";
+          container.innerHTML = renderTaskTable(filtered);
+        }
+      }
+
+      lucide.createIcons();
+    }
+
+    function renderTaskCard(t) {
+      const dateInfo = formatDateBadge(t.dueDate);
+      const isMax = t.currentStep >= t.maxStep;
+      const pct = Math.round((t.currentStep / t.maxStep) * 100);
+
+      return `
+        <div id="task-card-${t.id}" class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-4 transition-all hover:border-slate-600 ${t.completed ? 'opacity-60' : ''}">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-start gap-3 flex-1 min-w-0">
+              <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleComplete('${t.id}')" class="mt-1 w-5 h-5 rounded border-slate-700 bg-slate-900 text-sky-500 focus:ring-0 cursor-pointer">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h4 class="font-semibold text-slate-100 ${t.completed ? 'line-through text-slate-400' : ''}">${escapeHtml(t.title)}</h4>
+                  ${getPriorityBadge(t.priority)}
+                  ${t.genre ? `<span class="px-2 py-0.5 text-[10px] bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded-md">\${escapeHtml(t.genre)}</span>` : ''}
+                </div>
+
+                ${(!isCompact && t.notes) ? `<p class="text-xs text-slate-400 mt-1.5 leading-relaxed">\${escapeHtml(t.notes)}</p>` : ''}
+
+                <div class="flex items-center gap-2 mt-2 flex-wrap text-xs">
+                  <span class="px-2.5 py-0.5 rounded-full border text-[11px] font-medium flex items-center gap-1 ${dateInfo.class}">
+                    <i data-lucide="calendar" class="w-3 h-3"></i> ${dateInfo.label}
+                  </span>
+                  ${t.dueDate ? `<button onclick="addToGoogleCalendar('\${escapeHtml(t.title)}', '${t.dueDate}', '${escapeHtml(t.notes)}')" class="text-slate-400 hover:text-sky-400 transition-colors flex items-center gap-1 text-[11px]"><i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> カレンダー追加</button>` : ''}
+                </div>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-1">
+              <button onclick="openTaskModal('${t.id}')" class="p-1.5 text-slate-400 hover:text-sky-400 rounded-lg hover:bg-slate-700/50 transition-colors" title="編集"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+              <button onclick="deleteTask('${t.id}')" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-700/50 transition-colors" title="削除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </div>
+          </div>
+
+          <!-- Slider Progress -->
+          <div class="mt-3 pt-3 border-t border-slate-700/40">
+            <div class="flex justify-between items-center text-xs mb-1">
+              <span class="text-slate-400 font-medium">進捗: <strong class="text-sky-400 font-bold">${t.currentStep}/${t.maxStep}</strong> (${pct}%)</span>
+              <span class="text-[11px] text-slate-500">スライダーで更新</span>
+            </div>
+            <input type="range" min="0" max="${t.maxStep}" value="${t.currentStep}" onchange="updateStep('${t.id}', this.value)" class="w-full h-2 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-sky-500">
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTaskTable(tasksList) {
+      return `
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-950 text-slate-400 font-semibold border-b border-slate-800">
+            <tr>
+              <th class="p-3 w-10 text-center">済</th>
+              <th class="p-3">やる事 / 備考</th>
+              <th class="p-3">ジャンル</th>
+              <th class="p-3">優先度</th>
+              <th class="p-3">期限</th>
+              <th class="p-3 w-48">進捗 (?/${tasksList[0]?.maxStep || 5})</th>
+              <th class="p-3 text-right">操作</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800">
+            ${tasksList.map(t => {
+              const dateInfo = formatDateBadge(t.dueDate);
+              return `
+                <tr id="task-row-\${t.id}" class="hover:bg-slate-800/40 transition-colors">
+                  <td class="p-3 text-center">
+                    <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleComplete('${t.id}')" class="w-4 h-4 rounded border-slate-700 bg-slate-900 text-sky-500">
+                  </td>
+                  <td class="p-3">
+                    <div class="font-semibold text-slate-100 \${t.completed ? 'line-through text-slate-500' : ''}">${escapeHtml(t.title)}</div>${(!isCompact && t.notes) ? `<div class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(t.notes)}</div>` : ''}
+                  </td>
+                  <td class="p-3">\${t.genre ? `<span class="px-2 py-0.5 text-[10px] bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded">${escapeHtml(t.genre)}</span>` : '-'}</td>
+                  <td class="p-3">\${getPriorityBadge(t.priority)}</td>
+                  <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] border ${dateInfo.class}">${dateInfo.label}</span></td>
+                  <td class="p-3">
+                    <div class="flex items-center gap-2">
+                      <input type="range" min="0" max="\${t.maxStep}" value="${t.currentStep}" onchange="updateStep('${t.id}', this.value)" class="w-24 h-1.5 bg-slate-950 rounded appearance-none accent-sky-500">
+                      <span class="text-[11px] font-bold text-sky-400">${t.currentStep}/${t.maxStep}</span>
+                    </div>
+                  </td>
+                  <td class="p-3 text-right">
+                    <button onclick="openTaskModal('\${t.id}')" class="p-1 text-slate-400 hover:text-sky-400"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>
+                    <button onclick="deleteTask('\${t.id}')" class="p-1 text-slate-400 hover:text-rose-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    // --- Actions ---
+    function updateStep(id, val) {
+      const step = parseInt(val);
+      const task = tasks.find(t => t.id === id);
+      if (!task) return;
+
+      task.currentStep = step;
+
+      // Auto archive if reaches maxStep
+      if (task.currentStep >= task.maxStep && !task.completed) {
+        animateComplete(id, () => {
+          task.completed = true;
+          saveStorage();
+        });
+      } else {
+        saveStorage();
+      }
+    }
+
+    function toggleComplete(id) {
+      const task = tasks.find(t => t.id === id);
+      if (!task) return;
+
+      if (!task.completed) {
+        animateComplete(id, () => {
+          task.completed = true;
+          task.currentStep = task.maxStep;
+          saveStorage();
+        });
+      } else {
+        task.completed = false;
+        task.currentStep = 0;
+        saveStorage();
+      }
+    }
+
+    function animateComplete(id, callback) {
+      const el = document.getElementById(`task-card-${id}`) || document.getElementById(`task-row-${id}`);
+      if (el) {
+        el.classList.add('anim-complete');
+        setTimeout(callback, 550);
+      } else {
+        callback();
+      }
+    }
+
+    function deleteTask(id) {
+      if (confirm('このタスクを削除しますか？')) {
+        tasks = tasks.filter(t => t.id !== id);
+        saveStorage();
+      }
+    }
+
+    function setTab(tab) {
+      currentTab = tab;
+      document.getElementById('tab-active').className = tab === 'active' ? "px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-500 text-white shadow-sm" : "px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:bg-slate-800";
+      document.getElementById('tab-completed').className = tab === 'completed' ? "px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-500 text-white shadow-sm" : "px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:bg-slate-800";
+      render();
+    }
+
+    function setViewMode(mode) {
+      viewMode = mode;
+      document.getElementById('view-card').className = mode === 'card' ? "p-1.5 rounded text-sky-400 bg-slate-800" : "p-1.5 rounded text-slate-400 hover:text-slate-200";
+      document.getElementById('view-table').className = mode === 'table' ? "p-1.5 rounded text-sky-400 bg-slate-800" : "p-1.5 rounded text-slate-400 hover:text-slate-200";
+      render();
+    }
+
+    function toggleCompactMode() {
+      isCompact = !isCompact;
+      document.getElementById('compact-btn-text').innerText = isCompact ? "詳細表示" : "コンパクト表示";
+      render();
+    }
+
+    // --- Modal Actions ---
+    function openTaskModal(editId = null) {
+      const modal = document.getElementById('task-modal');
+      const form = document.getElementById('task-form');
+      
+      if (editId) {
+        const task = tasks.find(t => t.id === editId);
+        if (!task) return;
+        document.getElementById('modal-title').innerText = 'タスクの編集';
+        document.getElementById('edit-task-id').value = task.id;
+        document.getElementById('input-title').value = task.title;
+        document.getElementById('input-date').value = task.dueDate || '';
+        document.getElementById('input-no-date').checked = !task.dueDate;
+        document.getElementById('input-date').disabled = !task.dueDate;
+        document.getElementById('input-priority').value = task.priority;
+        document.getElementById('input-genre').value = task.genre || '';
+        document.getElementById('input-max-step').value = task.maxStep || 1;
+        document.getElementById('input-notes').value = task.notes || '';
+      } else {
+        document.getElementById('modal-title').innerText = '新規タスク追加';
+        document.getElementById('edit-task-id').value = '';
+        form.reset();
+        document.getElementById('input-no-date').checked = false;
+        document.getElementById('input-date').disabled = false;
+        document.getElementById('input-max-step').value = 1;
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeTaskModal() {
+      document.getElementById('task-modal').classList.add('hidden');
+    }
+
+    function toggleNoDate(checked) {
+      const dateInput = document.getElementById('input-date');
+      dateInput.disabled = checked;
+      if (checked) dateInput.value = '';
+    }
+
+    function handleSaveTask(e) {
+      e.preventDefault();
+      const editId = document.getElementById('edit-task-id').value;
+      const title = document.getElementById('input-title').value.trim();
+      const noDate = document.getElementById('input-no-date').checked;
+      const dueDate = noDate ? '' : document.getElementById('input-date').value;
+      const priority = document.getElementById('input-priority').value;
+      const genre = document.getElementById('input-genre').value.trim() || '全般';
+      const maxStep = parseInt(document.getElementById('input-max-step').value) || 1;
+      const notes = document.getElementById('input-notes').value.trim();
+
+      if (editId) {
+        // Update
+        const task = tasks.find(t => t.id === editId);
+        if (task) {
+          task.title = title;
+          task.dueDate = dueDate;
+          task.priority = priority;
+          task.genre = genre;
+          task.maxStep = maxStep;
+          if (task.currentStep > maxStep) task.currentStep = maxStep;
+          task.notes = notes;
+        }
+      } else {
+        // Create
+        tasks.unshift({
+          id: Date.now().toString(),
+          title,
+          dueDate,
+          priority,
+          genre,
+          currentStep: 0,
+          maxStep,
+          notes,
+          completed: false,
+          created: Date.now()
+        });
+      }
+
+      saveStorage();
+      closeTaskModal();
+    }
+
+    // --- AI Modal & Generation ---
+    function openAiModal() {
+      document.getElementById('ai-modal').classList.remove('hidden');
+    }
+
+    function closeAiModal() {
+      document.getElementById('ai-modal').classList.add('hidden');
+    }
+
+    function generateTasksWithAi() {
+      const prompt = document.getElementById('ai-prompt').value.trim();
+      if (!prompt) return;
+
+      const btn = document.getElementById('ai-submit-btn');
+      btn.innerText = 'AI解析中...';
+      btn.disabled = true;
+
+      setTimeout(() => {
+        // Simple client-side AI parser fallback
+        const lines = prompt.split(/[。\n、]/).filter(l => l.trim().length > 2);
+        lines.forEach(line => {
+          let genre = '全般';
+          if (line.includes('山') || line.includes('登') || line.includes('キャンプ')) genre = '趣味・アウトドア';
+          else if (line.includes('レポ') || line.includes('勉') || line.includes('単語')) genre = '学業';
+          else if (line.includes('予約') || line.includes('買い') || line.includes('手続き')) genre = '生活';
+
+          tasks.unshift({
+            id: Date.now().toString() + Math.random().toString().slice(2,5),
+            title: line.trim(),
+            dueDate: '',
+            priority: line.includes('絶対') || line.includes('急ぎ') ? '絶対' : '高',
+            genre,
+            currentStep: 0,
+            maxStep: line.includes('計画') ? 5 : 1,
+            notes: 'AIにより自動生成されたタスク',
+            completed: false,
+            created: Date.now()
+          });
+        });
+
+        saveStorage();
+        btn.innerHTML = '<i data-lucide="wand-2" class="w-4 h-4"></i> AIで自動抽出・生成';
+        btn.disabled = false;
+        closeAiModal();
+        document.getElementById('ai-prompt').value = '';
+      }, 1000);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
